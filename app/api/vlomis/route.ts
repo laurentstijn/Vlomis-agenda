@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import puppeteer from "puppeteer-core";
-import chromium from "@sparticuz/chromium";
+import chromium from "@sparticuz/chromium-min";
 
 // Tell Next.js to use the Edge Runtime or Node.js runtime
 // Puppeteer requires Node.js runtime, not Edge
@@ -36,12 +36,15 @@ async function getBrowser() {
     });
   }
 
-  // In production (Vercel), we use @sparticuz/chromium
+  // In production (Vercel), we use @sparticuz/chromium-min
+  // We point to a remote URL to bypass local file system issues
   return puppeteer.launch({
     args: chromium.args,
-    defaultViewport: (chromium as any).defaultViewport,
-    executablePath: await chromium.executablePath(),
-    headless: (chromium as any).headless === "true",
+    defaultViewport: chromium.defaultViewport,
+    executablePath: await chromium.executablePath(
+      "https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar"
+    ),
+    headless: chromium.headless,
   });
 }
 
