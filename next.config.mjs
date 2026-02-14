@@ -7,6 +7,7 @@ const nextConfig = {
     unoptimized: true,
   },
 
+  serverExternalPackages: ['puppeteer-core', '@sparticuz/chromium'],
   experimental: {
     serverComponentsExternalPackages: ['puppeteer-core', '@sparticuz/chromium'],
   },
