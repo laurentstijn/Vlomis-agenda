@@ -59,13 +59,8 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
   let browser = null;
 
   try {
-    const username = process.env.VLOMIS_USERNAME;
-    const password = process.env.VLOMIS_PASSWORD;
+    // Credentials already checked above
 
-    if (!username || !password) {
-      log("Missing credentials");
-      return { success: false, data: [], error: "Missing VLOMIS credentials", debug: debugLogs };
-    }
 
     log("Launching browser...");
     browser = await getBrowser();
