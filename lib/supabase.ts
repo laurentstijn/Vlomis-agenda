@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 
+// Supabase client configuration with real credentials
 // Get Supabase URL and key from environment
 // IMPORTANT: In production, these MUST come from environment variables only
 // For local v0 development, we include defaults to test the integration
