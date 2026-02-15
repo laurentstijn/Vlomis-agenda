@@ -120,7 +120,10 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
     }
 
     // Extract Data
-    const entries = await page.evaluate(() => {
+    // Pass username to evaluate context
+    // NOTE: evaluate runs in browser context, variables outside are not available unless passed as args
+    // puppeteer evaluate only takes Serializable args.
+    const entries = await page.evaluate((uname) => {
       const results: any[] = [];
       const rows = Array.from(document.querySelectorAll('tr'));
       for (let i = 0; i < rows.length; i++) {
@@ -135,7 +138,6 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
           const datePart = van.split(' ')[0];
           let registratiesoort = txt(6);
 
-          // Check for pending (cyan bg or delete button)
           const rowStyle = rows[i].getAttribute('style')?.toLowerCase() || '';
           const isCyan = rowStyle.includes('#80ffff') || rowStyle.includes('cyan');
           const cell8 = cells[8];
@@ -150,7 +152,7 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
             registratiesoort: registratiesoort,
             van: van,
             tot: tot,
-            medewerker: "User",
+            medewerker: uname, // Dynamic username
             functie: txt(2),
             afdeling: txt(1),
             vaartuig: txt(3),
@@ -158,7 +160,7 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
         }
       }
       return results;
-    });
+    }, username);
 
     log(`Extracted ${entries.length} entries.`);
     return { success: true, data: entries, debug: debugLogs };
@@ -202,7 +204,15 @@ export const GET = async (request: Request) => {
     let shouldScrape = true;
     let skipReason = "";
 
-    if (currentUser?.last_synced_at && currentUser?.sync_interval_minutes && !forceSync) {
+    // Always fetch DB first to check if empty
+    const dbResultInit = await getPlanningEntries(username, undefined, undefined, currentUser?.id);
+    const dbHasData = dbResultInit.success && dbResultInit.data.length > 0;
+
+    if (!dbHasData) {
+      // FAIL-SAFE: If DB is empty, FORCE SCRAPE regardless of interval
+      shouldScrape = true;
+      console.log(`[Sync] Initial DB empty. Forcing scrape.`);
+    } else if (currentUser?.last_synced_at && currentUser?.sync_interval_minutes && !forceSync) {
       const lastSync = new Date(currentUser.last_synced_at);
       const now = new Date();
       const diffMinutes = (now.getTime() - lastSync.getTime()) / (1000 * 60);
@@ -216,19 +226,24 @@ export const GET = async (request: Request) => {
     let liveData: PlanningEntry[] = [];
     let isLive = false;
     let debugLogs: string[] = [];
+    let scrapeSuccess = false;
 
     // 3. Scrape if needed
     if (shouldScrape) {
       console.log(`[Sync] Starting scrape for ${username}...`);
       const result = await scrapeVlomis({ username, password: password || undefined });
       debugLogs = result.debug;
+      scrapeSuccess = result.success;
 
       if (result.success) {
         liveData = result.data;
         isLive = true;
 
         // Save to DB
-        await savePlanningEntries(result.data, currentUser?.id);
+        const saveRes = await savePlanningEntries(result.data, currentUser?.id);
+        if (!saveRes.success) {
+          console.error(`[Sync] Save DB failed: ${saveRes.error}`);
+        }
 
         // Update last_synced_at
         if (currentUser?.id) {
@@ -237,40 +252,40 @@ export const GET = async (request: Request) => {
 
         await cleanupOldEntries(username, currentUser?.id);
 
-        // Trigger Google Sync logic here if needed (omitted for brevity, can check original if needed but kept simple for robustness)
         if (currentUser?.google_access_token) {
           const { syncEventsToCalendar } = await import('@/lib/google-calendar');
-          // Fire and forget
           syncEventsToCalendar(currentUser.id, result.data).catch(e => console.error("Google Sync Error", e));
         }
 
       } else {
         console.error(`[Sync] Scrape failed: ${result.error}`);
-        // Don't fail the request, just fallback to DB
       }
     } else {
       console.log(`[Sync] Skipped: ${skipReason}`);
     }
 
     // 4. ALWAYS Fetch from DB (Single Source of Truth + Cache)
-    // We fetch everything to be safe, or start from "firstDate"
     const firstDate = await getFirstDataDate(username, currentUser?.id);
     const dbResult = await getPlanningEntries(username, undefined, undefined, currentUser?.id);
 
     let finalData = dbResult.success ? dbResult.data : [];
 
-    // If we scraped and database fetch somehow failed, use scraped data
-    if (isLive && finalData.length === 0 && liveData.length > 0) {
-      finalData = liveData; // Fallback to live data if DB failed
+    // Fallback: If DB fetch failed or empty but we JUST scraped data successfully, use the live data directly
+    // This handles cases where savePlanningEntries might have failed but scrape succeeded
+    if (finalData.length === 0 && isLive && liveData.length > 0) {
+      console.log(`[Sync] DB empty/failed, using live data as fallback.`);
+      finalData = liveData;
     }
 
     // Return Response
     return NextResponse.json({
-      success: true, // Always success if we handled errors gracefully
+      success: true, // Always return 200 JSON unless internal crash
       data: finalData,
       isLive,
       skipped: !shouldScrape,
-      message: shouldScrape ? (isLive ? "Live sync successful" : "Sync failed, showing cached") : "Sync skipped (cached)",
+      message: shouldScrape
+        ? (scrapeSuccess ? "Live sync successful" : "Scrape failed, showing cached")
+        : "Sync skipped (cached)",
       historicalFrom: firstDate,
       user: currentUser?.display_name || username,
       userId: currentUser?.id,
