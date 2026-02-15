@@ -278,8 +278,19 @@ export const GET = async (request: Request) => {
     const firstDate = await getFirstDataDate(username, currentUser?.id);
     const dbResult = await getPlanningEntries(username, undefined, undefined, currentUser?.id);
 
-    let finalData = dbResult.success ? dbResult.data : [];
-    console.log(`[API] Final DB Fetch: ${finalData.length} entries.`);
+    let rawData = dbResult.success ? dbResult.data : [];
+
+    // Deduplicate entries (just in case)
+    // Key by start time, end time, and type to ensure uniqueness
+    const seen = new Set();
+    let finalData = rawData.filter(entry => {
+      const key = `${entry.van}-${entry.tot}-${entry.registratiesoort}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    console.log(`[API] Final DB Fetch: ${rawData.length} entries, Deduplicated to: ${finalData.length}`);
 
     // Fallback: If DB fetch failed or empty but we JUST scraped data successfully, use the live data directly
     if (finalData.length === 0 && isLive && liveData.length > 0) {
