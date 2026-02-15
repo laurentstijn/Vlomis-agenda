@@ -160,8 +160,18 @@ function formatTime(date: Date): string {
 }
 
 function parseApiDate(dateStr: string): Date {
+  if (!dateStr) return new Date();
+
+  // If it's already an ISO string (e.g., from DB), new Date() can handle it
+  if (dateStr.includes("-") && dateStr.includes("T")) {
+    return new Date(dateStr);
+  }
+
+  // Fallback for Vlomis raw format: DD/MM/YYYY HH:MM
   const normalized = dateStr.replace(/\s+/g, " ").trim();
   const [datePart, timePart] = normalized.split(" ");
+  if (!datePart) return new Date();
+
   const [day, month, year] = datePart.split("/").map(Number);
   const [hours, minutes] = (timePart || "00:00").split(":").map(Number);
   return new Date(year, month - 1, day, hours, minutes);
