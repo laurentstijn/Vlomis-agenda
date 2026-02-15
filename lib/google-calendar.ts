@@ -97,8 +97,21 @@ export async function syncEventsToCalendar(userId: string, events: any[]) {
       .single();
 
     if (userData?.google_calendar_id && userData.google_calendar_id !== 'primary') {
-      calendarId = userData.google_calendar_id;
-    } else {
+      try {
+        // Verify the calendar still exists
+        await calendar.calendars.get({ calendarId: userData.google_calendar_id });
+        calendarId = userData.google_calendar_id;
+      } catch (err: any) {
+        if (err.code === 404) {
+          console.log('Stored calendar ID not found (manual deletion?), resetting...');
+          calendarId = 'primary'; // reset to trigger search/create below
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    if (calendarId === 'primary') {
       // Check if "Vlomis Planning" already exists in user's calendar list
       try {
         const calendarList = await calendar.calendarList.list();
