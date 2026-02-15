@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import puppeteer from "puppeteer-core";
 
-// Tell Next.js to use the Edge Runtime or Node.js runtime
-// Puppeteer requires Node.js runtime, not Edge
-export const dynamic = 'force-dynamic'; // static by default, unless reading the request
-export const maxDuration = 60; // This function can run for a maximum of 60 seconds
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
 const VLOMIS_BASE_URL = "https://mip.agentschapmdk.be/Vlomis";
 const LOGIN_URL = `${VLOMIS_BASE_URL}/Login.aspx`;
 const PLANNING_URL = `${VLOMIS_BASE_URL}/Planning.aspx`;
@@ -21,27 +20,21 @@ interface PlanningEntry {
   vaartuig: string;
 }
 
-// Helper to get browser instance
 async function getBrowser() {
   const isDev = process.env.NODE_ENV === "development";
-
-  // In development, we use the local Chrome installation
   if (isDev) {
     return puppeteer.launch({
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
-      headless: true, // Set to false to see the browser in action during dev
-      executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", // Validated local path
+      headless: true,
+      executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     });
   }
-
-  // In production (Vercel), we connect to a remote browser (Browserless.io)
   if (process.env.BROWSER_WS_ENDPOINT) {
     console.log("Connecting to remote browser...");
     return puppeteer.connect({
       browserWSEndpoint: process.env.BROWSER_WS_ENDPOINT,
     });
   }
-
   throw new Error("Missing BROWSER_WS_ENDPOINT environment variable in production!");
 }
 
@@ -62,87 +55,42 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
   let browser = null;
 
   try {
-    // Credentials already checked above
-
-
     log("Launching browser...");
     browser = await getBrowser();
     const page = await browser.newPage();
-
-    // Set viewport to a standard desktop size
-    // Set viewport to a standard desktop size
     await page.setViewport({ width: 1280, height: 800 });
-
-    // Set User-Agent to avoid detection/headless formatting issues
     await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
+    await page.setExtraHTTPHeaders({ 'Accept-Language': 'nl-BE,nl;q=0.9,en-US;q=0.8,en;q=0.7' });
 
-    // Set Locale to Ensure Belgian Date Formats (dd/mm/yyyy)
-    await page.setExtraHTTPHeaders({
-      'Accept-Language': 'nl-BE,nl;q=0.9,en-US;q=0.8,en;q=0.7'
-    });
-
-    // Step 1: Login
     log(`Navigating to login: ${LOGIN_URL}`);
     await page.goto(LOGIN_URL, { waitUntil: "networkidle0" });
 
-    // Check if we're actually on the login page (or already logged in/redirected)
-    const title = await page.title();
-    log(`Page title: ${title}`);
-
-    // Check if login form is present
     const loginButtonPresent = await page.$('input[name*="LoginButton"]');
-
     if (loginButtonPresent) {
       log("Login form found. Entering credentials...");
-
-      // Type username
       await page.type('input[name*="UserName"]', username);
-
-      // Type password
       await page.type('input[name*="Password"]', password);
-
-      // Click login and wait for navigation
-      log("Submitting login form...");
       await Promise.all([
         page.click('input[name*="LoginButton"]'),
         page.waitForNavigation({ waitUntil: "networkidle0" }),
       ]);
-
-      log("Login submitted. Checking result...");
     } else {
       log("No login form found. Maybe already logged in?");
     }
 
-    // Step 2: Navigate to Planning
     log(`Navigating to planning: ${PLANNING_URL}`);
     await page.goto(PLANNING_URL, { waitUntil: "networkidle0" });
 
     const planningTitle = await page.title();
-    log(`Planning page title: ${planningTitle}`);
-
-    // Check if we were redirected back to login
     if (planningTitle.includes("Login") || (await page.$('input[name*="Password"]'))) {
-      log("Redirected to login page. Login failed.");
       return { success: false, data: [], error: "Login failed or session expired", debug: debugLogs };
     }
 
-    // Step 3: Search logic
-    // Even if rows exist, we might want to ensure date range.
-    // But let's check row count first.
-    const rowCount = await page.evaluate(() => {
-      return document.querySelectorAll('tr').length;
-    });
-
-    log(`Initial row count: ${rowCount}`);
-
-    // If few rows, or just to be safe, set the date range.
-    // NOTE: Vlomis only allows querying from the current month forward!
-    log("Setting date range...");
-
+    // Set date range (Current month to +12 months)
     const today = new Date();
-    const fromDate = new Date(today); // Start from today
+    const fromDate = new Date(today);
     const toDate = new Date(today);
-    toDate.setMonth(today.getMonth() + 12); // +12 months forward
+    toDate.setMonth(today.getMonth() + 12);
 
     const formatDate = (d: Date) => {
       const day = d.getDate().toString().padStart(2, "0");
@@ -151,13 +99,11 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
       return `${day}/${month}/${year}`;
     };
 
-    // Find inputs (robust selectors)
     const vanInput = await page.$('input[name*="van$txtDate"]');
     const totInput = await page.$('input[name*="tot$txtDate"]');
     const searchBtn = await page.$('input[name*="btnSearch"]');
 
     if (vanInput && totInput && searchBtn) {
-      // Clear and type
       await page.evaluate((val) => {
         const el = document.querySelector('input[name*="van$txtDate"]') as HTMLInputElement;
         if (el) el.value = val;
@@ -168,111 +114,59 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
         if (el) el.value = val;
       }, formatDate(toDate));
 
-      log(`Dates set: ${formatDate(fromDate)} - ${formatDate(toDate)}. Clicking search...`);
-
-      // Set up dialog handler BEFORE clicking
-      page.on('dialog', async dialog => {
-        log(`Dialog appeared: ${dialog.message()}`);
-        await dialog.accept();
-      });
-
-      // Click search
-      // Wait for update
+      page.on('dialog', async dialog => await dialog.accept());
       await page.click('input[name*="btnSearch"]');
-      log("Waiting 5s for AJAX update...");
-      await new Promise(r => setTimeout(r, 5000));
-    } else {
-      log("Search inputs not found.");
+      await new Promise(r => setTimeout(r, 5000)); // Wait for AJAX
     }
 
-    // Step 4: Extract Data
-    log("Extracting table data...");
-
-    // Evaluate logic to parse the table
+    // Extract Data
     const entries = await page.evaluate(() => {
       const results: any[] = [];
       const rows = Array.from(document.querySelectorAll('tr'));
-
       for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        const cells = Array.from(row.querySelectorAll('td'));
-
-        // Expected columns based on list view:
-        // 0: Day (Vr)
-        // 1: Dienst
-        // 2: Functie
-        // 3: Vaartuig
-        // 4: Van (dd/mm/yyyy hh:mm)
-        // 5: Tot
-        // 6: Registratiesoort
-
+        const cells = Array.from(rows[i].querySelectorAll('td'));
         if (cells.length < 7) continue;
 
         const txt = (idx: number) => (cells[idx]?.textContent || "").trim();
         const van = txt(4);
         const tot = txt(5);
 
-        // Check if col 4 and 5 look like dates
         if (/\d{1,2}\/\d{1,2}\/\d{4}/.test(van) && /\d{1,2}\/\d{1,2}\/\d{4}/.test(tot)) {
-          // It's a data row!
-          const datePart = van.split(' ')[0]; // "13/02/2026"
-
+          const datePart = van.split(' ')[0];
           let registratiesoort = txt(6);
 
-          // Check for "Pending" status based on HTML analysis
-          // 1. Background color #80FFFF (Cyan)
-          const row = rows[i];
-          const rowStyle = row.getAttribute('style')?.toLowerCase() || '';
+          // Check for pending (cyan bg or delete button)
+          const rowStyle = rows[i].getAttribute('style')?.toLowerCase() || '';
           const isCyan = rowStyle.includes('#80ffff') || rowStyle.includes('cyan');
-
-          // 2. Delete button (class="del") in column index 8 (9th column)
-          // <a ... class="del" title="Verlof schrappen" ...>
           const cell8 = cells[8];
-          const hasDeleteBtn = cell8?.querySelector('.del') !== null ||
-            cell8?.querySelector('a[title*="schrappen"]') !== null;
+          const hasDeleteBtn = cell8?.querySelector('.del') !== null || cell8?.querySelector('a[title*="schrappen"]') !== null;
 
-          // If either condition is met, mark as pending
           if ((isCyan || hasDeleteBtn) && registratiesoort.includes('Verlof')) {
             registratiesoort += ' (Aangevraagd)';
           }
 
           results.push({
-            id: `scrape-${i}-${Math.random().toString(36).substring(7)}`,
             date: datePart,
             registratiesoort: registratiesoort,
             van: van,
             tot: tot,
             medewerker: "User",
             functie: txt(2),
-            afdeling: txt(1), // Dienst
+            afdeling: txt(1),
             vaartuig: txt(3),
           });
         }
       }
-
       return results;
     });
 
     log(`Extracted ${entries.length} entries.`);
-
-    if (entries.length === 0) {
-      const pageText = await page.evaluate(() => document.body.innerText.substring(0, 500).replace(/\n/g, ' '));
-      log(`⚠️ No entries found! Page preview: "${pageText}..."`);
-
-      const tableHtml = await page.evaluate(() => document.querySelector('table')?.outerHTML.substring(0, 200) || "No table found");
-      log(`Table HTML snippet: ${tableHtml}`);
-    }
-
     return { success: true, data: entries, debug: debugLogs };
 
   } catch (error: any) {
-    log(`Critical error: ${error.message}`);
     return { success: false, data: [], error: error.message, debug: debugLogs };
   } finally {
-    if (browser) {
-      log("Closing browser...");
-      await browser.close();
-    }
+    if (browser) await browser.close();
   }
 }
 
@@ -281,141 +175,107 @@ export const GET = async (request: Request) => {
     const { searchParams } = new URL(request.url);
     const usernameParam = searchParams.get('username');
     const passwordParam = searchParams.get('password');
+    const forceSync = searchParams.get('force') === 'true';
 
-    // Import helpers
-    const { savePlanningEntries, getPlanningEntries, getFirstDataDate } = await import('@/lib/planning-db');
+    const { savePlanningEntries, getPlanningEntries, getFirstDataDate, cleanupOldEntries } = await import('@/lib/planning-db');
     const { getOrCreateUser } = await import('@/lib/user-db');
+    const { supabase } = await import('@/lib/supabase');
 
-    // Determine current user
+    // 1. Identify User
     let currentUser: any = null;
+    let username = usernameParam || process.env.VLOMIS_USERNAME || 'User';
+    let password = passwordParam || process.env.VLOMIS_PASSWORD;
 
-    // Case 1: Credentials provided via Query Params (Client App)
     if (usernameParam) {
       const userResult = await getOrCreateUser(usernameParam, passwordParam || undefined);
-      if (userResult.success) {
-        currentUser = userResult.user;
-      }
-    }
-    // Case 2: No params -> Check environment variables (Cron Job / Background Sync)
-    else if (process.env.VLOMIS_USERNAME) {
-      // Try to find the user that matches the env var username
-      const { data: user } = await (await import('@/lib/supabase')).supabase
+      if (userResult.success) currentUser = userResult.user;
+    } else if (process.env.VLOMIS_USERNAME) {
+      const { data: user } = await supabase
         .from('users')
         .select('*')
         .eq('vlomis_username', process.env.VLOMIS_USERNAME)
         .single();
+      if (user) currentUser = user;
+    }
 
-      if (user) {
-        console.log(`[Cron] Identified user from env: ${user.vlomis_username}`);
-        currentUser = user;
+    // 2. Decide if we should scrape
+    let shouldScrape = true;
+    let skipReason = "";
 
-        // CHECK SYNC INTERVAL
-        if (user.last_synced_at && user.sync_interval_minutes) {
-          const lastSync = new Date(user.last_synced_at);
-          const now = new Date();
-          const diffMinutes = (now.getTime() - lastSync.getTime()) / (1000 * 60);
+    if (currentUser?.last_synced_at && currentUser?.sync_interval_minutes && !forceSync) {
+      const lastSync = new Date(currentUser.last_synced_at);
+      const now = new Date();
+      const diffMinutes = (now.getTime() - lastSync.getTime()) / (1000 * 60);
 
-          if (diffMinutes < user.sync_interval_minutes) {
-            console.log(`[Cron] Skipping sync. Last sync was ${Math.round(diffMinutes)} mins ago. Interval is ${user.sync_interval_minutes} mins.`);
-            return NextResponse.json({
-              success: true,
-              skipped: true,
-              message: `Skipping sync. Next run in ${Math.round(user.sync_interval_minutes - diffMinutes)} mins.`,
-              last_synced_at: user.last_synced_at
-            });
-          }
+      if (diffMinutes < currentUser.sync_interval_minutes) {
+        shouldScrape = false;
+        skipReason = `Interval not passed (${Math.round(diffMinutes)} < ${currentUser.sync_interval_minutes})`;
+      }
+    }
+
+    let liveData: PlanningEntry[] = [];
+    let isLive = false;
+    let debugLogs: string[] = [];
+
+    // 3. Scrape if needed
+    if (shouldScrape) {
+      console.log(`[Sync] Starting scrape for ${username}...`);
+      const result = await scrapeVlomis({ username, password: password || undefined });
+      debugLogs = result.debug;
+
+      if (result.success) {
+        liveData = result.data;
+        isLive = true;
+
+        // Save to DB
+        await savePlanningEntries(result.data, currentUser?.id);
+
+        // Update last_synced_at
+        if (currentUser?.id) {
+          await supabase.from('users').update({ last_synced_at: new Date().toISOString() }).eq('id', currentUser.id);
         }
+
+        await cleanupOldEntries(username, currentUser?.id);
+
+        // Trigger Google Sync logic here if needed (omitted for brevity, can check original if needed but kept simple for robustness)
+        if (currentUser?.google_access_token) {
+          const { syncEventsToCalendar } = await import('@/lib/google-calendar');
+          // Fire and forget
+          syncEventsToCalendar(currentUser.id, result.data).catch(e => console.error("Google Sync Error", e));
+        }
+
+      } else {
+        console.error(`[Sync] Scrape failed: ${result.error}`);
+        // Don't fail the request, just fallback to DB
       }
+    } else {
+      console.log(`[Sync] Skipped: ${skipReason}`);
     }
 
-    const username = usernameParam || process.env.VLOMIS_USERNAME || 'User';
-    const password = passwordParam || process.env.VLOMIS_PASSWORD;
-
-    // Step 1: Scrape live data from Vlomis
-    const result = await scrapeVlomis({ username, password: password || undefined });
-
-    if (!result.success) {
-      // Fallback to database
-      const dbResult = await getPlanningEntries(username, undefined, undefined, currentUser?.id);
-      if (dbResult.success && dbResult.data.length > 0) {
-        return NextResponse.json({
-          success: true,
-          data: dbResult.data,
-          isLive: false,
-          source: 'database',
-          message: 'Scraping failed, showing cached data',
-          historicalFrom: currentUser?.id ? (await getFirstDataDate(username, currentUser.id)) : null,
-          debug: result.debug,
-          fetchedAt: new Date().toISOString()
-        });
-      }
-      return NextResponse.json(result, { status: 500 });
-    }
-
-    // Step 2: Save to database
-    const saveResult = await savePlanningEntries(result.data, currentUser?.id);
-
-    // Step 2.1: Update last_synced_at
-    if (currentUser?.id) {
-      await (await import('@/lib/supabase')).supabase
-        .from('users')
-        .update({ last_synced_at: new Date().toISOString() })
-        .eq('id', currentUser.id);
-    }
-
-    // Step 2.5: Cleanup
-    const { cleanupOldEntries } = await import('@/lib/planning-db');
-    await cleanupOldEntries(username, currentUser?.id);
-
-    // Step 3: Get first data date
+    // 4. ALWAYS Fetch from DB (Single Source of Truth + Cache)
+    // We fetch everything to be safe, or start from "firstDate"
     const firstDate = await getFirstDataDate(username, currentUser?.id);
+    const dbResult = await getPlanningEntries(username, undefined, undefined, currentUser?.id);
 
-    // Step 4: Combine database data
-    let combinedData = result.data;
-    if (firstDate) {
-      const today = new Date().toISOString().split('T')[0];
-      const dbResult = await getPlanningEntries(username, firstDate, today, currentUser?.id);
+    let finalData = dbResult.success ? dbResult.data : [];
 
-      if (dbResult.success) {
-        const liveDataMap = new Map(
-          result.data.map(entry => [`${entry.van}-${entry.tot}-${entry.registratiesoort}`, entry])
-        );
-        const dbOnlyData = dbResult.data.filter(
-          entry => !liveDataMap.has(`${entry.van}-${entry.tot}-${entry.registratiesoort}`)
-        );
-        combinedData = [...dbOnlyData, ...result.data].sort((a, b) =>
-          new Date(a.van).getTime() - new Date(b.van).getTime()
-        );
-      }
+    // If we scraped and database fetch somehow failed, use scraped data
+    if (isLive && finalData.length === 0 && liveData.length > 0) {
+      finalData = liveData; // Fallback to live data if DB failed
     }
 
-    // Step 5: Sync to Google Calendar if connected
-    if (currentUser?.google_access_token) {
-      // Import dynamically to avoid circular dependencies if any
-      const { syncEventsToCalendar } = await import('@/lib/google-calendar');
-      // Fire and forget - or await if we want to ensure it's done
-      // We await to catch errors and log them, but don't fail the request
-      try {
-        console.log(`[Google Calendar] Starting sync of ${combinedData.length} events for user ${username} (ID: ${currentUser.id})`);
-        await syncEventsToCalendar(currentUser.id, combinedData);
-        console.log(`[Google Calendar] Sync completed successfully for ${username}`);
-      } catch (calError: any) {
-        console.error('[Google Calendar] Failed to sync:', calError);
-        console.error('[Google Calendar] Error details:', JSON.stringify(calError, null, 2));
-        // We continue, as the user still wants their planning data
-      }
-    }
-
+    // Return Response
     return NextResponse.json({
-      success: true,
-      data: combinedData,
-      isLive: true,
-      source: 'combined',
+      success: true, // Always success if we handled errors gracefully
+      data: finalData,
+      isLive,
+      skipped: !shouldScrape,
+      message: shouldScrape ? (isLive ? "Live sync successful" : "Sync failed, showing cached") : "Sync skipped (cached)",
       historicalFrom: firstDate,
       user: currentUser?.display_name || username,
       userId: currentUser?.id,
       googleConnected: !!currentUser?.google_access_token,
-      debug: result.debug,
+      debug: debugLogs,
       fetchedAt: new Date().toISOString()
     });
 
