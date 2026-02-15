@@ -70,7 +70,16 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
     const page = await browser.newPage();
 
     // Set viewport to a standard desktop size
+    // Set viewport to a standard desktop size
     await page.setViewport({ width: 1280, height: 800 });
+
+    // Set User-Agent to avoid detection/headless formatting issues
+    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
+
+    // Set Locale to Ensure Belgian Date Formats (dd/mm/yyyy)
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'nl-BE,nl;q=0.9,en-US;q=0.8,en;q=0.7'
+    });
 
     // Step 1: Login
     log(`Navigating to login: ${LOGIN_URL}`);
@@ -245,6 +254,14 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
     });
 
     log(`Extracted ${entries.length} entries.`);
+
+    if (entries.length === 0) {
+      const pageText = await page.evaluate(() => document.body.innerText.substring(0, 500).replace(/\n/g, ' '));
+      log(`⚠️ No entries found! Page preview: "${pageText}..."`);
+
+      const tableHtml = await page.evaluate(() => document.querySelector('table')?.outerHTML.substring(0, 200) || "No table found");
+      log(`Table HTML snippet: ${tableHtml}`);
+    }
 
     return { success: true, data: entries, debug: debugLogs };
 
