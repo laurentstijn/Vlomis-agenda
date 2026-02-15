@@ -21,20 +21,32 @@ interface PlanningEntry {
 }
 
 async function getBrowser() {
+  // Always prefer browserless over local Chrome
+  if (process.env.BROWSER_WS_ENDPOINT) {
+    console.log("[Scraper] Connecting to browserless service...");
+    try {
+      const browser = await puppeteer.connect({
+        browserWSEndpoint: process.env.BROWSER_WS_ENDPOINT,
+      });
+      console.log("[Scraper] Successfully connected to browserless");
+      return browser;
+    } catch (err: any) {
+      console.error("[Scraper] Failed to connect to browserless:", err.message);
+      throw new Error(`Failed to connect to browserless service: ${err.message}`);
+    }
+  }
+  
+  // Fallback to local Chrome (development only)
   const isDev = process.env.NODE_ENV === "development";
   if (isDev) {
+    console.log("[Scraper] Launching local Chrome (dev mode)...");
     return puppeteer.launch({
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
       headless: true,
       executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     });
   }
-  if (process.env.BROWSER_WS_ENDPOINT) {
-    console.log("Connecting to remote browser...");
-    return puppeteer.connect({
-      browserWSEndpoint: process.env.BROWSER_WS_ENDPOINT,
-    });
-  }
+  
   throw new Error("Missing BROWSER_WS_ENDPOINT environment variable in production!");
 }
 
@@ -293,15 +305,57 @@ export const GET = async (request: Request) => {
     }
 
     // --- Google Calendar Sync (Self-Healing & Proactive) ---
+    let googleSyncResult = { success: false, message: "", error: "" };
     if (finalData.length > 0 && currentUser?.google_access_token) {
       // Run sync if forced, OR if we don't have a calendar ID yet, OR if we successfully scraped
       const needsGoogleSync = forceSync || !currentUser.google_calendar_id || isLive;
 
       if (needsGoogleSync) {
-        console.log(`[Google] Triggering sync for user ${username} (isLive: ${isLive}, force: ${forceSync})`);
-        const { syncEventsToCalendar } = await import('@/lib/google-calendar');
-        // Trigger sync (it's async, we don't await to avoid slowing down API response)
-        syncEventsToCalendar(currentUser.id, finalData).catch(e => console.error("[Google] Sync Error:", e));
+        try {
+          console.log(`[Google] Triggering sync for user ${username} (isLive: ${isLive}, force: ${forceSync})`);
+          const { syncEventsToCalendar } = await import('@/lib/google-calendar');
+          
+          // IMPORTANT: Actually await the sync to ensure it completes
+          await syncEventsToCalendar(currentUser.id, finalData);
+          
+          googleSyncResult = {
+            success: true,
+            message: `Successfully synced ${finalData.length} events to Google Calendar`,
+            error: ""
+          };
+          console.log(`[Google] Sync completed for user ${username}`);
+        } catch (e: any) {
+          const errorMsg = e?.message || String(e);
+          googleSyncResult = {
+            success: false,
+            message: "Google Calendar sync failed",
+            error: errorMsg
+          };
+          console.error(`[Google] Sync Error for ${username}:`, errorMsg);
+        }
+      } else {
+        console.log(`[Google] Sync not needed: forceSync=${forceSync}, hasCalendarId=${!!currentUser.google_calendar_id}, isLive=${isLive}`);
+        googleSyncResult = {
+          success: false,
+          message: "Google Calendar sync not triggered",
+          error: "Conditions not met for sync"
+        };
+      }
+    } else {
+      if (!currentUser?.google_access_token) {
+        console.log(`[Google] No Google token for user ${username}`);
+        googleSyncResult = {
+          success: false,
+          message: "Google Calendar not connected",
+          error: "User has not connected their Google account"
+        };
+      } else if (finalData.length === 0) {
+        console.log(`[Google] No data to sync for user ${username}`);
+        googleSyncResult = {
+          success: false,
+          message: "No events to sync",
+          error: "No planning entries available"
+        };
       }
     }
 
@@ -318,6 +372,7 @@ export const GET = async (request: Request) => {
       user: currentUser?.display_name || username,
       userId: currentUser?.id,
       googleConnected: !!currentUser?.google_access_token,
+      googleSync: googleSyncResult,
       debug: debugLogs,
       fetchedAt: new Date().toISOString()
     });
