@@ -1,15 +1,12 @@
 import { NextResponse } from "next/server";
 import puppeteer from "puppeteer-core";
-import chromium from "@sparticuz/chromium";
 
 // Tell Next.js to use the Edge Runtime or Node.js runtime
 // Puppeteer requires Node.js runtime, not Edge
-export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // Set max duration for the function (in seconds)
+export const dynamic = 'force-dynamic'; // static by default, unless reading the request
+export const maxDuration = 60; // This function can run for a maximum of 60 seconds
 
-const VLOMIS_BASE_URL = "https://mip.agentschapmdk.be/Vlomis";
-const LOGIN_URL = `${VLOMIS_BASE_URL}/Login.aspx`;
-const PLANNING_URL = `${VLOMIS_BASE_URL}/Planning.aspx`;
+const LOGIN_URL = "https://vlomis.sint-rembert.be/gebruiker/aanmelden"; // Replace with actual URL
 
 interface PlanningEntry {
   id?: string;
@@ -36,14 +33,15 @@ async function getBrowser() {
     });
   }
 
-  // In production (Vercel), we use @sparticuz/chromium
-  // This includes the binary locally/via dependency
-  return puppeteer.launch({
-    args: chromium.args,
-    defaultViewport: chromium.defaultViewport,
-    executablePath: await chromium.executablePath(),
-    headless: chromium.headless,
-  });
+  // In production (Vercel), we connect to a remote browser (Browserless.io)
+  if (process.env.BROWSER_WS_ENDPOINT) {
+    console.log("Connecting to remote browser...");
+    return puppeteer.connect({
+      browserWSEndpoint: process.env.BROWSER_WS_ENDPOINT,
+    });
+  }
+
+  throw new Error("Missing BROWSER_WS_ENDPOINT environment variable in production!");
 }
 
 async function scrapeVlomis(credentials?: { username?: string; password?: string }): Promise<{ success: boolean; data: PlanningEntry[]; error?: string; debug: string[] }> {
