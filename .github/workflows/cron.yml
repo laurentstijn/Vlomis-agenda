@@ -9,6 +9,6 @@ jobs:
   cron:
     runs-on: ubuntu-latest
     steps:
-      - name: Call Vercel Endpoint
+      - name: Call Batch Sync Orchestrator
         run: |
-          curl -s https://vlomis-agenda.vercel.app/api/vlomis
+          curl -s "https://vlomis-agenda.vercel.app/api/sync/cron?secret=${{ secrets.CRON_SECRET }}"
