@@ -6,7 +6,9 @@ import puppeteer from "puppeteer-core";
 export const dynamic = 'force-dynamic'; // static by default, unless reading the request
 export const maxDuration = 60; // This function can run for a maximum of 60 seconds
 
+const VLOMIS_BASE_URL = "https://mip.agentschapmdk.be/Vlomis";
 const LOGIN_URL = "https://vlomis.sint-rembert.be/gebruiker/aanmelden"; // Replace with actual URL
+const PLANNING_URL = `${VLOMIS_BASE_URL}/Planning.aspx`;
 
 interface PlanningEntry {
   id?: string;
