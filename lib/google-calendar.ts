@@ -83,6 +83,8 @@ export async function getGoogleClientForUser(userId: string) {
 
 export async function syncEventsToCalendar(userId: string, events: any[]) {
   try {
+    console.log(`[syncEventsToCalendar] Starting sync for user ${userId} with ${events.length} events`);
+    
     const auth = await getGoogleClientForUser(userId);
     const calendar = google.calendar({ version: 'v3', auth });
 
@@ -96,14 +98,17 @@ export async function syncEventsToCalendar(userId: string, events: any[]) {
       .eq('id', userId)
       .single();
 
+    console.log(`[syncEventsToCalendar] User data retrieved, current calendarId: ${userData?.google_calendar_id || 'none'}`);
+
     if (userData?.google_calendar_id && userData.google_calendar_id !== 'primary') {
       try {
         // Verify the calendar still exists
         await calendar.calendars.get({ calendarId: userData.google_calendar_id });
         calendarId = userData.google_calendar_id;
+        console.log(`[syncEventsToCalendar] Using existing calendar: ${calendarId}`);
       } catch (err: any) {
         if (err.code === 404) {
-          console.log('Stored calendar ID not found (manual deletion?), resetting...');
+          console.log('[syncEventsToCalendar] Stored calendar ID not found (manual deletion?), resetting...');
           calendarId = 'primary'; // reset to trigger search/create below
         } else {
           throw err;
@@ -114,6 +119,7 @@ export async function syncEventsToCalendar(userId: string, events: any[]) {
     if (calendarId === 'primary') {
       // Check if "Vlomis Planning" already exists in user's calendar list
       try {
+        console.log('[syncEventsToCalendar] Checking for existing Vlomis Planning calendar...');
         const calendarList = await calendar.calendarList.list();
         const existingCalendar = calendarList.data.items?.find(
           c => c.summary === 'Vlomis Planning'
@@ -121,9 +127,10 @@ export async function syncEventsToCalendar(userId: string, events: any[]) {
 
         if (existingCalendar?.id) {
           calendarId = existingCalendar.id;
+          console.log(`[syncEventsToCalendar] Found existing Vlomis Planning calendar: ${calendarId}`);
         } else {
           // Create new calendar
-          console.log('Creating new Vlomis Planning calendar...');
+          console.log('[syncEventsToCalendar] Creating new Vlomis Planning calendar...');
           const newCalendar = await calendar.calendars.insert({
             requestBody: {
               summary: 'Vlomis Planning',
@@ -134,6 +141,7 @@ export async function syncEventsToCalendar(userId: string, events: any[]) {
 
           if (newCalendar.data.id) {
             calendarId = newCalendar.data.id;
+            console.log(`[syncEventsToCalendar] Created new calendar: ${calendarId}`);
           }
         }
 
@@ -143,23 +151,29 @@ export async function syncEventsToCalendar(userId: string, events: any[]) {
             .from('users')
             .update({ google_calendar_id: calendarId })
             .eq('id', userId);
+          console.log(`[syncEventsToCalendar] Saved calendar ID to user record`);
         }
       } catch (err) {
-        console.error('Error finding/creating calendar, falling back to primary:', err);
+        console.error('[syncEventsToCalendar] Error finding/creating calendar, falling back to primary:', err);
         calendarId = 'primary';
       }
     }
 
     // For each planning entry from Vlomis
+    console.log(`[syncEventsToCalendar] Processing ${events.length} events for calendar ${calendarId}`);
+    
     for (const entry of events) {
       // User request: Filter out 'Reserve' and 'Rust' (skip them)
       const type = entry.registratiesoort || '';
       if (type.includes('Reserve') || type.includes('Rust')) {
+        console.log(`[syncEventsToCalendar] Skipping ${type} entry`);
         continue;
       }
 
-      // Add a small delay to avoid rate limits
-      await new Promise(r => setTimeout(r, 500));
+      // Add a small delay to avoid rate limits (every 5 events, not every event)
+      if (events.indexOf(entry) % 5 === 0) {
+        await new Promise(r => setTimeout(r, 200));
+      }
 
       const eventId = crypto.createHash('sha256').update(entry.vlomis_entry_id).digest('hex');
 
@@ -263,7 +277,7 @@ export async function syncEventsToCalendar(userId: string, events: any[]) {
           calendarId,
           requestBody: eventResource,
         });
-        console.log(`Created event: ${summary}`);
+        console.log(`[syncEventsToCalendar] Created event: ${summary} (${start.date || start.dateTime})`);
       } catch (e: any) {
         if (e.code === 409) {
           // Event exists, update it
@@ -273,12 +287,12 @@ export async function syncEventsToCalendar(userId: string, events: any[]) {
               eventId: eventResource.id,
               requestBody: eventResource,
             });
-            console.log(`Updated event: ${summary}`);
-          } catch (updateErr) {
-            console.error(`Error updating event ${eventId}:`, updateErr);
+            console.log(`[syncEventsToCalendar] Updated event: ${summary}`);
+          } catch (updateErr: any) {
+            console.error(`[syncEventsToCalendar] Error updating event ${eventId}:`, updateErr.message || updateErr);
           }
         } else {
-          console.error(`Error inserting event ${eventId}:`, e);
+          console.error(`[syncEventsToCalendar] Error inserting event ${eventId} (${summary}):`, e.message || e);
         }
       }
     }
