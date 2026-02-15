@@ -21,33 +21,41 @@ interface PlanningEntry {
 }
 
 async function getBrowser() {
+  // Build browserless endpoint from token if not provided as environment variable
+  let browserWSEndpoint = process.env.BROWSER_WS_ENDPOINT
+  
+  if (!browserWSEndpoint && process.env.BROWSERLESS_API_TOKEN) {
+    browserWSEndpoint = `wss://chrome.browserless.io?token=${process.env.BROWSERLESS_API_TOKEN}`
+    console.log('[Scraper] Built browserless endpoint from token')
+  }
+  
   // Always prefer browserless over local Chrome
-  if (process.env.BROWSER_WS_ENDPOINT) {
-    console.log("[Scraper] Connecting to browserless service...");
+  if (browserWSEndpoint) {
+    console.log("[Scraper] Connecting to browserless service...")
     try {
       const browser = await puppeteer.connect({
-        browserWSEndpoint: process.env.BROWSER_WS_ENDPOINT,
-      });
-      console.log("[Scraper] Successfully connected to browserless");
-      return browser;
+        browserWSEndpoint: browserWSEndpoint,
+      })
+      console.log("[Scraper] Successfully connected to browserless")
+      return browser
     } catch (err: any) {
-      console.error("[Scraper] Failed to connect to browserless:", err.message);
-      throw new Error(`Failed to connect to browserless service: ${err.message}`);
+      console.error("[Scraper] Failed to connect to browserless:", err.message)
+      throw new Error(`Failed to connect to browserless service: ${err.message}`)
     }
   }
   
   // Fallback to local Chrome (development only)
-  const isDev = process.env.NODE_ENV === "development";
+  const isDev = process.env.NODE_ENV === "development"
   if (isDev) {
-    console.log("[Scraper] Launching local Chrome (dev mode)...");
+    console.log("[Scraper] Launching local Chrome (dev mode)...")
     return puppeteer.launch({
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
       headless: true,
       executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    });
+    })
   }
   
-  throw new Error("Missing BROWSER_WS_ENDPOINT environment variable in production!");
+  throw new Error("Missing BROWSER_WS_ENDPOINT or BROWSERLESS_API_TOKEN environment variable in production!")
 }
 
 async function scrapeVlomis(credentials?: { username?: string; password?: string }): Promise<{ success: boolean; data: PlanningEntry[]; error?: string; debug: string[] }> {
