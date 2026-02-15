@@ -4,10 +4,8 @@ import puppeteer from "puppeteer-core";
 // Tell Next.js to use the Edge Runtime or Node.js runtime
 // Puppeteer requires Node.js runtime, not Edge
 export const dynamic = 'force-dynamic'; // static by default, unless reading the request
-export const maxDuration = 60; // This function can run for a maximum of 60 seconds
-
 const VLOMIS_BASE_URL = "https://mip.agentschapmdk.be/Vlomis";
-const LOGIN_URL = "https://vlomis.sint-rembert.be/gebruiker/aanmelden"; // Replace with actual URL
+const LOGIN_URL = `${VLOMIS_BASE_URL}/Login.aspx`;
 const PLANNING_URL = `${VLOMIS_BASE_URL}/Planning.aspx`;
 
 interface PlanningEntry {
