@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 
+// Supabase client initialization with proper fallback handling
 // Get Supabase URL and key from environment variables
 // Use hardcoded credentials as fallback if environment variables are not properly loaded
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://phsacjihxfuccnvvatos.supabase.co'
