@@ -231,8 +231,10 @@ export function PlanningCalendar() {
 
     if (searchParams.get("google_connected") === "true") {
       toast.success("Google Agenda succesvol gekoppeld!", {
-        description: "Je planning wordt nu op de achtergrond gesynchroniseerd.",
+        description: "Je planning wordt nu gesynchroniseerd.",
       });
+      // Trigger a re-validation. The fetcher should ideally check for this state.
+      mutate();
       router.replace("/");
     }
   }, [searchParams, router]);

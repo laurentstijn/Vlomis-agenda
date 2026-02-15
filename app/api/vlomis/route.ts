@@ -220,8 +220,8 @@ export const GET = async (request: Request) => {
       // FAIL-SAFE: If DB is empty, FORCE SCRAPE regardless of interval
       shouldScrape = true;
       console.log(`[Sync] Initial DB empty. Forcing scrape.`);
-    } else if (currentUser?.last_synced_at && currentUser?.sync_interval_minutes && !forceSync) {
-      const lastSync = new Date(currentUser.last_synced_at);
+    } else if (currentUser?.last_sync_at && currentUser?.sync_interval_minutes && !forceSync) {
+      const lastSync = new Date(currentUser.last_sync_at);
       const now = new Date();
       const diffMinutes = (now.getTime() - lastSync.getTime()) / (1000 * 60);
 
@@ -255,18 +255,12 @@ export const GET = async (request: Request) => {
           console.log(`[Sync] Successfully saved ${result.data.length} entries to DB.`);
         }
 
-        // Update last_synced_at
+        // Update last_sync_at
         if (currentUser?.id) {
-          await supabase.from('users').update({ last_synced_at: new Date().toISOString() }).eq('id', currentUser.id);
+          await supabase.from('users').update({ last_sync_at: new Date().toISOString() }).eq('id', currentUser.id);
         }
 
         await cleanupOldEntries(username, currentUser?.id);
-
-        if (currentUser?.google_access_token) {
-          const { syncEventsToCalendar } = await import('@/lib/google-calendar');
-          syncEventsToCalendar(currentUser.id, result.data).catch(e => console.error("Google Sync Error", e));
-        }
-
       } else {
         console.error(`[Sync] Scrape failed: ${result.error}`);
       }
@@ -296,6 +290,19 @@ export const GET = async (request: Request) => {
     if (finalData.length === 0 && isLive && liveData.length > 0) {
       console.log(`[Sync] DB empty/failed, using live data as fallback.`);
       finalData = liveData;
+    }
+
+    // --- Google Calendar Sync (Self-Healing & Proactive) ---
+    if (finalData.length > 0 && currentUser?.google_access_token) {
+      // Run sync if forced, OR if we don't have a calendar ID yet, OR if we successfully scraped
+      const needsGoogleSync = forceSync || !currentUser.google_calendar_id || isLive;
+
+      if (needsGoogleSync) {
+        console.log(`[Google] Triggering sync for user ${username} (isLive: ${isLive}, force: ${forceSync})`);
+        const { syncEventsToCalendar } = await import('@/lib/google-calendar');
+        // Trigger sync (it's async, we don't await to avoid slowing down API response)
+        syncEventsToCalendar(currentUser.id, finalData).catch(e => console.error("[Google] Sync Error:", e));
+      }
     }
 
     // Return Response

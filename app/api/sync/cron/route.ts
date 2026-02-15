@@ -25,7 +25,7 @@ export async function GET(request: Request) {
         // 1. Fetch all users
         const { data: users, error } = await supabase
             .from('users')
-            .select('id, vlomis_username, vlomis_password, last_synced_at, sync_interval_minutes');
+            .select('id, vlomis_username, vlomis_password, last_sync_at, sync_interval_minutes');
 
         if (error) throw error;
         if (!users || users.length === 0) {
@@ -42,10 +42,10 @@ export async function GET(request: Request) {
             let shouldSync = false;
             const interval = user.sync_interval_minutes || 30; // Default to 30 mins
 
-            if (!user.last_synced_at) {
+            if (!user.last_sync_at) {
                 shouldSync = true;
             } else {
-                const lastSync = new Date(user.last_synced_at);
+                const lastSync = new Date(user.last_sync_at);
                 const diffMinutes = (now.getTime() - lastSync.getTime()) / (1000 * 60);
                 if (diffMinutes >= interval) {
                     shouldSync = true;
