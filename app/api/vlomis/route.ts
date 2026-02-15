@@ -120,9 +120,6 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
     }
 
     // Extract Data
-    // Pass username to evaluate context
-    // NOTE: evaluate runs in browser context, variables outside are not available unless passed as args
-    // puppeteer evaluate only takes Serializable args.
     const entries = await page.evaluate((uname) => {
       const results: any[] = [];
       const rows = Array.from(document.querySelectorAll('tr'));
@@ -152,7 +149,7 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
             registratiesoort: registratiesoort,
             van: van,
             tot: tot,
-            medewerker: uname, // Dynamic username
+            medewerker: uname,
             functie: txt(2),
             afdeling: txt(1),
             vaartuig: txt(3),
@@ -183,6 +180,8 @@ export const GET = async (request: Request) => {
     const { getOrCreateUser } = await import('@/lib/user-db');
     const { supabase } = await import('@/lib/supabase');
 
+    console.log(`[API] GET /api/vlomis params: usernameParam=${usernameParam}, forceSync=${forceSync}`);
+
     // 1. Identify User
     let currentUser: any = null;
     let username = usernameParam || process.env.VLOMIS_USERNAME || 'User';
@@ -200,6 +199,13 @@ export const GET = async (request: Request) => {
       if (user) currentUser = user;
     }
 
+    // CRITICAL: Ensure 'username' variable reflects the identified user
+    if (currentUser?.vlomis_username) {
+      username = currentUser.vlomis_username;
+    }
+
+    console.log(`[API] Identified User: ${username} (ID: ${currentUser?.id || 'null'})`);
+
     // 2. Decide if we should scrape
     let shouldScrape = true;
     let skipReason = "";
@@ -207,6 +213,8 @@ export const GET = async (request: Request) => {
     // Always fetch DB first to check if empty
     const dbResultInit = await getPlanningEntries(username, undefined, undefined, currentUser?.id);
     const dbHasData = dbResultInit.success && dbResultInit.data.length > 0;
+
+    console.log(`[API] Initial DB Check: ${dbResultInit.data.length} entries found.`);
 
     if (!dbHasData) {
       // FAIL-SAFE: If DB is empty, FORCE SCRAPE regardless of interval
@@ -243,6 +251,8 @@ export const GET = async (request: Request) => {
         const saveRes = await savePlanningEntries(result.data, currentUser?.id);
         if (!saveRes.success) {
           console.error(`[Sync] Save DB failed: ${saveRes.error}`);
+        } else {
+          console.log(`[Sync] Successfully saved ${result.data.length} entries to DB.`);
         }
 
         // Update last_synced_at
@@ -269,9 +279,9 @@ export const GET = async (request: Request) => {
     const dbResult = await getPlanningEntries(username, undefined, undefined, currentUser?.id);
 
     let finalData = dbResult.success ? dbResult.data : [];
+    console.log(`[API] Final DB Fetch: ${finalData.length} entries.`);
 
     // Fallback: If DB fetch failed or empty but we JUST scraped data successfully, use the live data directly
-    // This handles cases where savePlanningEntries might have failed but scrape succeeded
     if (finalData.length === 0 && isLive && liveData.length > 0) {
       console.log(`[Sync] DB empty/failed, using live data as fallback.`);
       finalData = liveData;
@@ -279,7 +289,7 @@ export const GET = async (request: Request) => {
 
     // Return Response
     return NextResponse.json({
-      success: true, // Always return 200 JSON unless internal crash
+      success: true,
       data: finalData,
       isLive,
       skipped: !shouldScrape,
@@ -295,6 +305,7 @@ export const GET = async (request: Request) => {
     });
 
   } catch (error: any) {
+    console.error("[API] Critical Error:", error);
     return NextResponse.json({
       success: false,
       error: "Internal Server Error",
