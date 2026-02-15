@@ -90,7 +90,7 @@ export async function getUserById(id: string): Promise<{ success: boolean; user?
     }
 }
 /**
- * Hard reset a user: delete all planning entries and clear Google tokens
+ * Hard reset a user: delete all planning entries and then delete the user itself
  */
 export async function hardResetUser(username: string): Promise<{ success: boolean; error?: string }> {
     try {
@@ -111,19 +111,13 @@ export async function hardResetUser(username: string): Promise<{ success: boolea
 
         if (deleteEntriesError) return { success: false, error: deleteEntriesError.message };
 
-        // 3. Clear tokens and calendar ID
-        const { error: updateUserError } = await supabase
+        // 3. Delete the user record completely
+        const { error: deleteUserError } = await supabase
             .from('users')
-            .update({
-                google_access_token: null,
-                google_refresh_token: null,
-                google_token_expiry: null,
-                google_calendar_id: null,
-                last_synced_at: null
-            })
+            .delete()
             .eq('id', user.id);
 
-        if (updateUserError) return { success: false, error: updateUserError.message };
+        if (deleteUserError) return { success: false, error: deleteUserError.message };
 
         return { success: true };
     } catch (error: any) {
