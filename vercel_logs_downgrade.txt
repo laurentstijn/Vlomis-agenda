@@ -1,0 +1,497 @@
+Vercel CLI 50.17.1
+Retrieving project…
+Fetching logs...
+TIME         HOST                                                       LEVEL                                
+06:36:12.50  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:36:12.43  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:36:10.94  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:35:11.05  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Critical error: Failed to launch the browser process! /tmp/chromium: error while loading shared libraries: libnss3.so: cannot open shared object file: No such file or directory   TROUBLESHOOTING: https://pptr.dev/troubleshooting
+
+06:35:10.96  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:35:09.96  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:35:09.07  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:35:03.83  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:34:58.78  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:34:44.05  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:43.88  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:43.40  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.76  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.76  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.59  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.50  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.38  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.38  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:07.71  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /icon-light-32x32.png   
+
+06:34:07.01  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:30.48  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:33:30.43  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:29.71  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:33:29.65  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:28.92  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:33:28.87  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:27.92  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:33:14.02  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:13.72  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:13.57  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:13.49  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:13.37  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:31:57.71  vlomis-agenda.vercel.app                                   info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:47.26  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:47.17  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:31:46.53  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:45.85  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:45.16  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:44.51  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:43.76  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:42.76  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:30:41.57  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:30:40.22  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:30:22.90  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:30:22.87  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:30:22.38  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:27:52.47  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:27:52.33  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:27:45.88  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:27:45.78  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:36:12.50  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:36:12.43  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:36:10.94  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:35:11.05  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:35:10.96  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:35:09.96  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:35:09.07  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:35:03.83  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:34:58.78  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:34:44.05  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:43.88  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:43.40  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.76  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.76  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.59  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.50  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.38  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.38  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:07.71  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /icon-light-32x32.png   
+
+06:34:07.01  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:30.48  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:33:30.43  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:29.71  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:33:29.65  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:28.92  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:33:28.87  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:27.92  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:33:14.02  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:13.72  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:13.57  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:13.49  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:13.37  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:31:57.71  vlomis-agenda.vercel.app                                   info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:47.26  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:47.17  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:31:46.53  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:45.85  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:45.16  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:44.51  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:43.76  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:42.76  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:30:41.57  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:30:40.22  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:30:22.90  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:30:22.87  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:30:22.38  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:27:52.47  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:27:52.33  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:27:45.88  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:27:45.78  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:36:12.50  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:36:12.43  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:36:10.94  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:35:11.05  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:35:10.96  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:35:09.96  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:35:09.07  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:35:03.83  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:34:58.78  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:34:44.05  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:43.88  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:43.40  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.76  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.76  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.59  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.50  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.38  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.38  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:07.71  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /icon-light-32x32.png   
+
+06:34:07.01  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:30.48  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:33:30.43  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:29.71  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:33:29.65  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:28.92  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:33:28.87  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:27.92  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:33:14.02  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:13.72  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:13.57  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:13.49  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:13.37  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:31:57.71  vlomis-agenda.vercel.app                                   info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:47.26  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:47.17  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:31:46.53  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:45.85  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:45.16  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:44.51  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:43.76  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:42.76  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:30:41.57  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:30:40.22  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:30:22.90  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:30:22.87  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:30:22.38  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:27:52.47  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:27:52.33  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:27:45.88  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:27:45.78  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:36:12.50  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:36:12.43  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:36:10.94  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:35:11.05  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:35:10.96  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:35:09.96  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:35:09.07  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:35:03.83  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:34:58.78  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:34:44.05  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:43.88  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:43.40  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.76  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.76  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.59  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.50  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.38  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:39.38  vlomis-agenda-q7qjuhynw-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:34:07.71  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /icon-light-32x32.png   
+
+06:34:07.01  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:30.48  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:33:30.43  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:29.71  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:33:29.65  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:28.92  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:33:28.87  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:27.92  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:33:14.02  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:13.72  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:13.57  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:13.49  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:33:13.37  vlomis-agenda-669you44s-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:31:57.71  vlomis-agenda.vercel.app                                   info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:47.26  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:47.17  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:31:46.53  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:45.85  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:45.16  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:44.51  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:43.76  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:31:42.76  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:30:41.57  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:30:40.22  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:30:22.90  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:30:22.87  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:30:22.38  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:27:52.47  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:27:52.33  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+06:27:45.88  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   λ GET /api/vlomis             
+Launching browser...
+
+06:27:45.78  vlomis-agenda-ginlxwv6p-laurentstijns-projects.vercel.app  info   ◇ GET /                       
+
+Fetched 200 logs for laurentstijns-projects/vlomis-agenda on branch main
