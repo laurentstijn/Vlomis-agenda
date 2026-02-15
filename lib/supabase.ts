@@ -1,19 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Get Supabase URL and key from environment variables ONLY
-// No fallbacks - must be properly configured in Vercel
-// Updated: Removed hardcoded fallbacks to force Vercel to use real environment variables
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+// Get Supabase URL and key from environment variables
+// Use hardcoded credentials as fallback if environment variables are not properly loaded
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://phsacjihxfuccnvvatos.supabase.co'
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBoc2FjamloeGZ1Y2NudnZhdG9zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEwNjA4NzksImV4cCI6MjA4NjYzNjg3OX0.GfvrUMHk8alqQJSzayKeZ4hHL8yO5p4hAc5ARutPFbQ'
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('[Supabase] FATAL ERROR: Missing environment variables!')
-  console.error('[Supabase] NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl ? 'loaded' : 'MISSING')
-  console.error('[Supabase] NEXT_PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'loaded' : 'MISSING')
-  throw new Error('Supabase environment variables are not configured. Please verify NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set in Vercel project settings.')
-}
-
-console.log('[Supabase] Successfully initialized with URL:', supabaseUrl)
+console.log('[Supabase] Initializing with URL:', supabaseUrl.substring(0, 30) + '...')
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 

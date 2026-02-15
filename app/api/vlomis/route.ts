@@ -21,20 +21,32 @@ interface PlanningEntry {
 }
 
 async function getBrowser() {
+  // Always prefer browserless over local Chrome
+  if (process.env.BROWSER_WS_ENDPOINT) {
+    console.log("[Scraper] Connecting to browserless service...");
+    try {
+      const browser = await puppeteer.connect({
+        browserWSEndpoint: process.env.BROWSER_WS_ENDPOINT,
+      });
+      console.log("[Scraper] Successfully connected to browserless");
+      return browser;
+    } catch (err: any) {
+      console.error("[Scraper] Failed to connect to browserless:", err.message);
+      throw new Error(`Failed to connect to browserless service: ${err.message}`);
+    }
+  }
+  
+  // Fallback to local Chrome (development only)
   const isDev = process.env.NODE_ENV === "development";
   if (isDev) {
+    console.log("[Scraper] Launching local Chrome (dev mode)...");
     return puppeteer.launch({
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
       headless: true,
       executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     });
   }
-  if (process.env.BROWSER_WS_ENDPOINT) {
-    console.log("Connecting to remote browser...");
-    return puppeteer.connect({
-      browserWSEndpoint: process.env.BROWSER_WS_ENDPOINT,
-    });
-  }
+  
   throw new Error("Missing BROWSER_WS_ENDPOINT environment variable in production!");
 }
 
