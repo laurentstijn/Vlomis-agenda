@@ -1,27 +1,20 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Supabase client configuration with real credentials
-// Get Supabase URL and key from environment
-// IMPORTANT: In production, these MUST come from environment variables only
-// For local v0 development, we include defaults to test the integration
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://phsacjihxfuccnvvatos.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBoc2FjamloeGZ1Y2NudnZhdG9zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEwNjA4NzksImV4cCI6MjA4NjYzNjg3OX0.GfvrUMHk8alqQJSzayKeZ4hHL8yO5p4hAc5ARutPFbQ'
-
-// Log for debugging - show first/last chars to verify it's loaded
-console.log('[Supabase] Initializing with URL:', supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : 'MISSING')
-console.log('[Supabase] Initializing with KEY:', supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'MISSING')
-
-let supabaseClient: any
+// Get Supabase URL and key from environment variables ONLY
+// No fallbacks - must be properly configured in Vercel
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseAnonKey) {
-    console.error('[Supabase] ERROR: Missing Supabase credentials!')
-    supabaseClient = createClient('https://placeholder.supabase.co', 'placeholder-key')
-} else {
-    supabaseClient = createClient(supabaseUrl, supabaseAnonKey)
-    console.log('[Supabase] Successfully initialized with credentials from:', supabaseUrl)
+  console.error('[Supabase] FATAL ERROR: Missing environment variables!')
+  console.error('[Supabase] NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl ? 'loaded' : 'MISSING')
+  console.error('[Supabase] NEXT_PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'loaded' : 'MISSING')
+  throw new Error('Supabase environment variables are not configured. Please verify NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set in Vercel project settings.')
 }
 
-export const supabase = supabaseClient
+console.log('[Supabase] Successfully initialized with URL:', supabaseUrl)
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 // Types for our database
 export interface PlanningEntry {
