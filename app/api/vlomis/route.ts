@@ -50,7 +50,11 @@ async function getBrowser() {
 
 async function scrapeVlomis(credentials?: { username?: string; password?: string }): Promise<{ success: boolean; data: PlanningEntry[]; error?: string; debug: string[] }> {
   const debugLogs: string[] = [];
-  const log = (msg: string) => debugLogs.push(`[${new Date().toISOString()}] ${msg}`);
+  const debugLogs: string[] = [];
+  const log = (msg: string) => {
+    console.log(msg);
+    debugLogs.push(`[${new Date().toISOString()}] ${msg}`);
+  };
 
   const username = credentials?.username || process.env.VLOMIS_USERNAME;
   const password = credentials?.password || process.env.VLOMIS_PASSWORD;
