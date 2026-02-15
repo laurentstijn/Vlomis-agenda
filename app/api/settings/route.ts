@@ -58,9 +58,9 @@ export async function POST(request: Request) {
 
         // Validate interval (minimum 30 mins)
         const interval = parseInt(sync_interval_minutes);
-        if (isNaN(interval) || interval < 30) {
+        if (isNaN(interval) || interval < 15) {
             return NextResponse.json(
-                { success: false, error: "Minimum interval is 30 minutes" },
+                { success: false, error: "Minimum interval is 15 minutes" },
                 { status: 400 }
             );
         }

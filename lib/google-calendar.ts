@@ -240,8 +240,7 @@ export async function syncEventsToCalendar(userId: string, events: any[]) {
         // colorId, // Disabled to use default calendar color
         id: eventId, // Try to reuse ID to update existing events
         reminders: {
-          useDefault: false,
-          overrides: isAllDay ? [] : [{ method: 'popup', minutes: 60 }],
+          useDefault: true,
         },
       };
 

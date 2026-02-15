@@ -2,7 +2,7 @@ name: "30-Minute Sync Heartbeat"
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch: # Allow manual trigger
 
 jobs:

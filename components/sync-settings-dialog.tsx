@@ -96,6 +96,7 @@ export function SyncSettingsDialog({
                                     <SelectValue placeholder="Kies interval" />
                                 </SelectTrigger>
                                 <SelectContent>
+                                    <SelectItem value="15">Elke 15 minuten (Test)</SelectItem>
                                     <SelectItem value="30">Elke 30 minuten</SelectItem>
                                     <SelectItem value="60">Elk uur</SelectItem>
                                     <SelectItem value="120">Elke 2 uur</SelectItem>
