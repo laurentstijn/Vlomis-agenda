@@ -308,6 +308,23 @@ export const GET = async (request: Request) => {
       if (user) {
         console.log(`[Cron] Identified user from env: ${user.vlomis_username}`);
         currentUser = user;
+
+        // CHECK SYNC INTERVAL
+        if (user.last_synced_at && user.sync_interval_minutes) {
+          const lastSync = new Date(user.last_synced_at);
+          const now = new Date();
+          const diffMinutes = (now.getTime() - lastSync.getTime()) / (1000 * 60);
+
+          if (diffMinutes < user.sync_interval_minutes) {
+            console.log(`[Cron] Skipping sync. Last sync was ${Math.round(diffMinutes)} mins ago. Interval is ${user.sync_interval_minutes} mins.`);
+            return NextResponse.json({
+              success: true,
+              skipped: true,
+              message: `Skipping sync. Next run in ${Math.round(user.sync_interval_minutes - diffMinutes)} mins.`,
+              last_synced_at: user.last_synced_at
+            });
+          }
+        }
       }
     }
 
@@ -337,6 +354,14 @@ export const GET = async (request: Request) => {
 
     // Step 2: Save to database
     const saveResult = await savePlanningEntries(result.data, currentUser?.id);
+
+    // Step 2.1: Update last_synced_at
+    if (currentUser?.id) {
+      await (await import('@/lib/supabase')).supabase
+        .from('users')
+        .update({ last_synced_at: new Date().toISOString() })
+        .eq('id', currentUser.id);
+    }
 
     // Step 2.5: Cleanup
     const { cleanupOldEntries } = await import('@/lib/planning-db');

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import useSWR from "swr";
 import {
   ChevronLeft,
@@ -11,6 +11,7 @@ import {
   RefreshCw,
   AlertCircle,
   CheckCircle2,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,8 +25,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { LoginDialog } from "./login-dialog";
+import { SyncSettingsDialog } from "./sync-settings-dialog";
 import { authStore, AuthCredentials } from "@/lib/auth-store";
-import { useEffect } from "react";
 
 interface PlanningEntry {
   id: string;
@@ -130,8 +131,6 @@ function getColorForType(type: string) {
 
   // Check valid substrings
   if (type.includes('Verlof') && type.includes('Aangevraagd')) {
-    // Use Verlof but maybe modify style slightly? 
-    // For now just return standard Verlof style or custom one
     return {
       bg: "bg-sky-50", // Lighter
       text: "text-sky-600",
@@ -161,8 +160,6 @@ function formatTime(date: Date): string {
 }
 
 function parseApiDate(dateStr: string): Date {
-  // Parse date format: "27/01/2026 00:00" or similar
-  // Handle both regular spaces and non-breaking spaces (\u00A0)
   const normalized = dateStr.replace(/\s+/g, " ").trim();
   const [datePart, timePart] = normalized.split(" ");
   const [day, month, year] = datePart.split("/").map(Number);
@@ -181,8 +178,6 @@ function convertApiDataToPlanning(entries: PlanningEntry[]): PlanningItem[] {
     registratiesoort: entry.registratiesoort || "",
   }));
 }
-
-
 
 function getDaysInMonth(year: number, month: number): Date[] {
   const days: Date[] = [];
@@ -211,6 +206,7 @@ export function PlanningCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [creds, setCreds] = useState<AuthCredentials | null>(null);
   const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -227,7 +223,6 @@ export function PlanningCalendar() {
       toast.success("Google Agenda succesvol gekoppeld!", {
         description: "Je planning wordt nu op de achtergrond gesynchroniseerd.",
       });
-      // Clean up URL
       router.replace("/");
     }
   }, [searchParams, router]);
@@ -264,11 +259,6 @@ export function PlanningCalendar() {
     setIsLoginDialogOpen(true);
   };
 
-  const dayClick = (day: Date) => {
-    // Implement day click logic if needed
-  };
-
-  // Fetch live data from API
   const { data, error, isLoading, mutate } = useSWR(
     creds ? ["/api/vlomis", creds.username, creds.password] : null,
     fetcher,
@@ -278,7 +268,6 @@ export function PlanningCalendar() {
     }
   );
 
-  // Use API data if available, otherwise empty
   const planningData = useMemo(() => {
     if (data?.success && data?.data?.length > 0) {
       return convertApiDataToPlanning(data.data);
@@ -418,6 +407,17 @@ export function PlanningCalendar() {
                           </button>
                         </div>
                       </div>
+
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 rounded-full"
+                        onClick={() => setIsSettingsOpen(true)}
+                        title="Instellingen"
+                      >
+                        <Settings className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
                         <User className="h-4 w-4" />
                       </div>
@@ -629,6 +629,14 @@ export function PlanningCalendar() {
         isOpen={isLoginDialogOpen}
         onLoginSuccess={handleLoginSuccess}
       />
+
+      {creds && (
+        <SyncSettingsDialog
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          username={creds.username}
+        />
+      )}
     </TooltipProvider>
   );
 }
