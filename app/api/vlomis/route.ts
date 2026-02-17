@@ -339,8 +339,10 @@ export const GET = async (request: Request) => {
           await supabase.from('users').update(updateData).eq('id', currentUser.id);
         }
 
-        // Cleanup old entries (can run independently)
-        await cleanupOldEntries(username, currentUser?.id);
+        // Cleanup old entries (ONLY if scrape was successful to prevent data wipe on failed sync)
+        if (scrapeSuccess) {
+          await cleanupOldEntries(username, currentUser?.id);
+        }
       })());
     } else {
       console.log(`[Sync] Skipped: ${skipReason}`);
