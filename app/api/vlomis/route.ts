@@ -380,16 +380,18 @@ export const GET = async (request: Request) => {
           console.log(`[Google] Starting sync for user ${username} (isLive: ${isLive}, force: ${forceSync})...`);
           const { syncEventsToCalendar } = await import('@/lib/google-calendar');
 
-          // We use waitUntil for the heavy lifting to avoid Vercel timeouts, 
-          // but we provide immediate feedback that it has started.
+          // INCREASE LIMIT for new users or manual refreshes to ensure they see future items
+          // Base: 25. Forced or New: 100.
+          const dynamicLimit = (forceSync || !currentUser.google_calendar_id) ? 100 : syncLimit;
+
           waitUntil((async () => {
-            await syncEventsToCalendar(currentUser.id, finalData, syncLimit);
-            console.log(`[Background] Google Sync completed for ${username}.`);
+            await syncEventsToCalendar(currentUser.id, finalData, dynamicLimit);
+            console.log(`[Background] Google Sync finished for ${username}.`);
           })());
 
           googleSyncResult = {
             success: true,
-            message: `Started sync of ${finalData.length} events to Google Calendar`,
+            message: `Sync gestart (${finalData.length} items)...`,
             error: ""
           };
         } catch (e: any) {

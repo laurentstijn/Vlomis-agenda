@@ -168,10 +168,16 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
     }
 
     // 4. SMART CLEANUP: Instead of wiping, we fetch existing events and only delete what is no longer needed
+    // SAFETY: NEVER perform smart cleanup on the 'primary' calendar to avoid deleting user's personal events.
     if (calendarId && calendarId !== 'primary') {
       try {
         console.log(`[Sync] Fetching existing events in calendar ${calendarId} for smart diffing...`);
-        const eventsRes = await calendar.events.list({ calendarId, maxResults: 1000 });
+        const eventsRes = await calendar.events.list({
+          calendarId,
+          maxResults: 2500,
+          showDeleted: false,
+          singleEvents: true
+        });
         const existingEvents = eventsRes.data.items || [];
 
         // Generate a set of current event IDs that SHOULD exist
@@ -180,16 +186,25 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
           return crypto.createHash('sha256').update(syncId).digest('hex');
         }));
 
-        const eventsToDelete = existingEvents.filter(ev => ev.id && !currentEventIds.has(ev.id));
+        // ONLY delete events that look like they were created by this app (e.g., have our deterministic hex ID)
+        // A hex ID of 64 chars is a good indicator of our hashes.
+        const hexRegex = /^[0-9a-f]{64}$/;
+        const eventsToDelete = existingEvents.filter(ev =>
+          ev.id &&
+          hexRegex.test(ev.id) &&
+          !currentEventIds.has(ev.id)
+        );
 
         if (eventsToDelete.length > 0) {
-          console.log(`[Sync] Found ${eventsToDelete.length} stale events to remove.`);
-          for (const ev of eventsToDelete) {
+          console.log(`[Sync] Found ${eventsToDelete.length} stale Vlomis events to remove.`);
+          // Limit deletions per run to avoid hitting rate limits too fast
+          const deleteLimit = 50;
+          for (const ev of eventsToDelete.slice(0, deleteLimit)) {
             if (ev.id) {
               await calendar.events.delete({ calendarId, eventId: ev.id });
             }
           }
-          console.log('[Sync] Smart cleanup complete.');
+          console.log(`[Sync] Smart cleanup: removed ${Math.min(eventsToDelete.length, deleteLimit)} events.`);
         } else {
           console.log('[Sync] No stale events found. Skipping cleanup.');
         }
