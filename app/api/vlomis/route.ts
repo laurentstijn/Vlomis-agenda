@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import puppeteer from "puppeteer-core";
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const VLOMIS_BASE_URL = "https://mip.agentschapmdk.be/Vlomis";
 const LOGIN_URL = `${VLOMIS_BASE_URL}/Login.aspx`;
@@ -10,6 +11,7 @@ const PLANNING_URL = `${VLOMIS_BASE_URL}/Planning.aspx`;
 
 interface PlanningEntry {
   id?: string;
+  vlomis_entry_id?: string;
   date: string;
   registratiesoort: string;
   van: string;
@@ -24,7 +26,7 @@ async function getBrowser() {
   // Use hardcoded browserless token directly
   const { BROWSERLESS_TOKEN } = await import('@/lib/supabase-config')
   const browserWSEndpoint = `wss://chrome.browserless.io?token=${BROWSERLESS_TOKEN}`
-  
+
   console.log("[Scraper] Connecting to browserless service...")
   try {
     const browser = await puppeteer.connect({
@@ -38,7 +40,7 @@ async function getBrowser() {
   }
 }
 
-async function scrapeVlomis(credentials?: { username?: string; password?: string }): Promise<{ success: boolean; data: PlanningEntry[]; error?: string; debug: string[] }> {
+async function scrapeVlomis(credentials?: { username?: string; password?: string }): Promise<{ success: boolean; data: PlanningEntry[]; realName?: string; realFunctie?: string; error?: string; debug: string[] }> {
   const debugLogs: string[] = [];
   const log = (msg: string) => {
     console.log(msg);
@@ -65,6 +67,10 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
     log(`Navigating to login: ${LOGIN_URL}`);
     await page.goto(LOGIN_URL, { waitUntil: "networkidle0" });
 
+    // Ensure we are actually on the login page or if we are already logged in
+    const title = await page.title();
+    log(`Current page title: ${title}`);
+
     const loginButtonPresent = await page.$('input[name*="LoginButton"]');
     if (loginButtonPresent) {
       log("Login form found. Entering credentials...");
@@ -74,21 +80,34 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
         page.click('input[name*="LoginButton"]'),
         page.waitForNavigation({ waitUntil: "networkidle0" }),
       ]);
+
+      const afterLoginTitle = await page.title();
+      log(`Page title after login attempt: ${afterLoginTitle}`);
     } else {
-      log("No login form found. Maybe already logged in?");
+      log("No login form found. Checking if session is already active...");
     }
 
     log(`Navigating to planning: ${PLANNING_URL}`);
-    await page.goto(PLANNING_URL, { waitUntil: "networkidle0" });
+    // Random delay between 1-3s to look more human
+    await new Promise(res => setTimeout(res, 1000 + Math.random() * 2000));
+    const response = await page.goto(PLANNING_URL, { waitUntil: "networkidle2" });
 
-    const planningTitle = await page.title();
-    if (planningTitle.includes("Login") || (await page.$('input[name*="Password"]'))) {
-      return { success: false, data: [], error: "Login failed or session expired", debug: debugLogs };
+    if (response && response.status() === 429) {
+      log("Vlomis returned 429 (Too Many Requests).");
+      return { success: false, data: [], error: "Too many requests (429) from Vlomis. Please wait a few minutes.", debug: debugLogs };
     }
 
-    // Set date range (Current month to +12 months)
+    const planningTitle = await page.title();
+    log(`Planning page title: ${planningTitle}`);
+
+    if (planningTitle.includes("Login") || (await page.$('input[name*="Password"]'))) {
+      log("Scrape failed: Redirected to login or password field remains.");
+      return { success: false, data: [], error: `Login failed or session expired (Title: ${planningTitle})`, debug: debugLogs };
+    }
+
+    // Set date range (Start of current month to +12 months)
     const today = new Date();
-    const fromDate = new Date(today);
+    const fromDate = new Date(today.getFullYear(), today.getMonth(), 1); // 1st of current month
     const toDate = new Date(today);
     toDate.setMonth(today.getMonth() + 12);
 
@@ -116,24 +135,36 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
 
       page.on('dialog', async dialog => await dialog.accept());
       await page.click('input[name*="btnSearch"]');
-      await new Promise(r => setTimeout(r, 5000)); // Wait for AJAX
+
+      // OPTIMIZED: Wait for results table to populate instead of fixed 5s
+      try {
+        await page.waitForFunction(() => {
+          const rows = document.querySelectorAll('tr');
+          return rows.length > 5; // Basic check for results
+        }, { timeout: 8000 });
+      } catch (e) {
+        // Fallback for cases where waitForFunction might fail
+        await new Promise(r => setTimeout(r, 2000));
+      }
     }
 
     // Extract Data
     const entries = await page.evaluate((uname) => {
       const results: any[] = [];
       const rows = Array.from(document.querySelectorAll('tr'));
+
+      const txt = (idx: number, cells: HTMLTableCellElement[]) => (cells[idx]?.textContent || "").trim();
+
       for (let i = 0; i < rows.length; i++) {
         const cells = Array.from(rows[i].querySelectorAll('td'));
         if (cells.length < 7) continue;
 
-        const txt = (idx: number) => (cells[idx]?.textContent || "").trim();
-        const van = txt(4);
-        const tot = txt(5);
+        const vanStr = txt(4, cells);
+        const totStr = txt(5, cells);
 
-        if (/\d{1,2}\/\d{1,2}\/\d{4}/.test(van) && /\d{1,2}\/\d{1,2}\/\d{4}/.test(tot)) {
-          const datePart = van.split(' ')[0];
-          let registratiesoort = txt(6);
+        if (/\d{1,2}\/\d{1,2}\/\d{4}/.test(vanStr)) {
+          const datePart = vanStr.trim().split(/\s+/)[0];
+          let registratiesoort = txt(6, cells);
 
           const rowStyle = rows[i].getAttribute('style')?.toLowerCase() || '';
           const isCyan = rowStyle.includes('#80ffff') || rowStyle.includes('cyan');
@@ -144,23 +175,80 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
             registratiesoort += ' (Aangevraagd)';
           }
 
+          // Helper to convert DD/MM/YYYY HH:MM to UTC ISO (Robust)
+          const convertToUTC = (dateStr: string): string => {
+            try {
+              const [dPart, tPart = '00:00'] = dateStr.trim().split(/\s+/);
+              const [d, m, y] = dPart.split('/').map(n => parseInt(n));
+              const [h, min] = tPart.split(':').map(n => parseInt(n));
+
+              // UTC base
+              const dateObj = new Date(Date.UTC(y, m - 1, d, h, min));
+
+              // Brussels Offset (CET=+1, CEST=+2)
+              let offset = 1;
+              const mo = m - 1;
+              if (mo > 2 && mo < 9) offset = 2;
+              else if (mo === 2) {
+                // Last Sunday of March
+                const lastSun = d - dateObj.getUTCDay();
+                if (lastSun > 25 || (lastSun === 25 && h >= 1)) offset = 2;
+              } else if (mo === 9) {
+                // Last Sunday of October
+                const lastSun = d - dateObj.getUTCDay();
+                if (lastSun < 25 || (lastSun === 25 && h < 1)) offset = 2;
+              }
+
+              return new Date(dateObj.getTime() - (offset * 60 * 60 * 1000)).toISOString();
+            } catch (e) {
+              return dateStr;
+            }
+          };
+
+          const vanUTC = convertToUTC(vanStr);
+          const totUTC = convertToUTC(totStr);
+          const ISOdate = datePart.split('/').reverse().join('-');
+          const stableVanTime = (vanStr.includes(' ') ? vanStr.split(' ')[1] : '00:00').padStart(5, '0');
+
           results.push({
-            date: datePart,
+            vlomis_entry_id: `${uname}-${ISOdate}-${registratiesoort}-${stableVanTime}`,
+            date: ISOdate,
             registratiesoort: registratiesoort,
-            van: van,
-            tot: tot,
+            van: vanUTC,
+            tot: totUTC,
             medewerker: uname,
-            functie: txt(2),
-            afdeling: txt(1),
-            vaartuig: txt(3),
+            functie: txt(2, cells),
+            afdeling: txt(1, cells),
+            vaartuig: txt(3, cells),
           });
         }
       }
       return results;
-    }, username);
+    }, username) as PlanningEntry[];
 
-    log(`Extracted ${entries.length} entries.`);
-    return { success: true, data: entries, debug: debugLogs };
+    // Extract & Format Real Name
+    const rawRealName = await page.evaluate(() => {
+      const el = document.querySelector('input#ctl00_ContentPlaceHolder1_ctl01_select_per_id') as HTMLInputElement;
+      return el ? el.value.trim() : null;
+    });
+
+    // Format "LAURENT Stijn" -> "Stijn Laurent"
+    const formatName = (name: string | null) => {
+      if (!name) return null;
+      const parts = name.split(" ");
+      if (parts.length >= 2) {
+        const last = parts[0].charAt(0) + parts[0].slice(1).toLowerCase();
+        const first = parts.slice(1).join(" ");
+        return `${first} ${last}`;
+      }
+      return name;
+    };
+    const realName = formatName(rawRealName);
+
+    const realFunctie = entries.length > 0 ? entries[0].functie : undefined;
+
+    log(`Extracted ${entries.length} entries. Real name: ${realName || 'not found'}, Functie: ${realFunctie || 'not found'}`);
+    return { success: true, data: entries, realName: realName || undefined, realFunctie: realFunctie, debug: debugLogs };
 
   } catch (error: any) {
     return { success: false, data: [], error: error.message, debug: debugLogs };
@@ -175,6 +263,8 @@ export const GET = async (request: Request) => {
     const usernameParam = searchParams.get('username');
     const passwordParam = searchParams.get('password');
     const forceSync = searchParams.get('force') === 'true';
+    const limitParam = searchParams.get('limit');
+    const syncLimit = limitParam ? parseInt(limitParam) : 500;
 
     const { savePlanningEntries, getPlanningEntries, getFirstDataDate, cleanupOldEntries } = await import('@/lib/planning-db');
     const { getOrCreateUser } = await import('@/lib/user-db');
@@ -184,19 +274,12 @@ export const GET = async (request: Request) => {
 
     // 1. Identify User
     let currentUser: any = null;
-    let username = usernameParam || process.env.VLOMIS_USERNAME || 'User';
-    let password = passwordParam || process.env.VLOMIS_PASSWORD;
+    let username = usernameParam || 'User';
+    let password = passwordParam || '';
 
     if (usernameParam) {
       const userResult = await getOrCreateUser(usernameParam, passwordParam || undefined);
       if (userResult.success) currentUser = userResult.user;
-    } else if (process.env.VLOMIS_USERNAME) {
-      const { data: user } = await supabase
-        .from('users')
-        .select('*')
-        .eq('vlomis_username', process.env.VLOMIS_USERNAME)
-        .single();
-      if (user) currentUser = user;
     }
 
     // CRITICAL: Ensure 'username' variable reflects the identified user
@@ -207,34 +290,18 @@ export const GET = async (request: Request) => {
     console.log(`[API] Identified User: ${username} (ID: ${currentUser?.id || 'null'})`);
 
     // 2. Decide if we should scrape
-    let shouldScrape = true;
-    let skipReason = "";
+    const SYNC_INTERVAL = (currentUser?.sync_interval_minutes || 60) * 60 * 1000;
+    const lastSync = currentUser?.last_sync_at ? new Date(currentUser.last_sync_at).getTime() : 0;
+    const now = Date.now();
 
-    // Always fetch DB first to check if empty
-    const dbResultInit = await getPlanningEntries(username, undefined, undefined, currentUser?.id);
-    const dbHasData = dbResultInit.success && dbResultInit.data.length > 0;
-
-    console.log(`[API] Initial DB Check: ${dbResultInit.data.length} entries found.`);
-
-    if (!dbHasData) {
-      // FAIL-SAFE: If DB is empty, FORCE SCRAPE regardless of interval
-      shouldScrape = true;
-      console.log(`[Sync] Initial DB empty. Forcing scrape.`);
-    } else if (currentUser?.last_sync_at && currentUser?.sync_interval_minutes && !forceSync) {
-      const lastSync = new Date(currentUser.last_sync_at);
-      const now = new Date();
-      const diffMinutes = (now.getTime() - lastSync.getTime()) / (1000 * 60);
-
-      if (diffMinutes < currentUser.sync_interval_minutes) {
-        shouldScrape = false;
-        skipReason = `Interval not passed (${Math.round(diffMinutes)} < ${currentUser.sync_interval_minutes})`;
-      }
-    }
+    let shouldScrape = forceSync || (now - lastSync > SYNC_INTERVAL) || !currentUser;
+    let skipReason = "Data is fresh (within interval)";
 
     let liveData: PlanningEntry[] = [];
     let isLive = false;
     let debugLogs: string[] = [];
     let scrapeSuccess = false;
+    let scrapeError: string | undefined = undefined;
 
     // 3. Scrape if needed
     if (shouldScrape) {
@@ -242,28 +309,39 @@ export const GET = async (request: Request) => {
       const result = await scrapeVlomis({ username, password: password || undefined });
       debugLogs = result.debug;
       scrapeSuccess = result.success;
-
+      scrapeError = result.error;
       if (result.success) {
         liveData = result.data;
         isLive = true;
-
-        // Save to DB
-        const saveRes = await savePlanningEntries(result.data, currentUser?.id);
-        if (!saveRes.success) {
-          console.error(`[Sync] Save DB failed: ${saveRes.error}`);
-        } else {
-          console.log(`[Sync] Successfully saved ${result.data.length} entries to DB.`);
-        }
-
-        // Update last_sync_at
-        if (currentUser?.id) {
-          await supabase.from('users').update({ last_sync_at: new Date().toISOString() }).eq('id', currentUser.id);
-        }
-
-        await cleanupOldEntries(username, currentUser?.id);
       } else {
         console.error(`[Sync] Scrape failed: ${result.error}`);
       }
+
+      // --- BACKGROUND PERSISTENT TASKS ---
+      waitUntil((async () => {
+        console.log(`[Background] Starting persistent tasks for ${username}...`);
+
+        // Save to DB (only if scrape was successful and data exists)
+        if (scrapeSuccess && liveData.length > 0) {
+          const saveRes = await savePlanningEntries(liveData, currentUser?.id);
+          if (saveRes.success) {
+            console.log(`[Background] Saved ${liveData.length} entries to DB.`);
+          }
+        }
+
+        // Update user metadata (last_sync_at should always be updated after an attempt)
+        if (currentUser?.id) {
+          const updateData: any = { last_sync_at: new Date().toISOString() };
+          // Only update display_name if scrape was successful and realName is available
+          if (scrapeSuccess && result.realName && currentUser.display_name !== result.realName) {
+            updateData.display_name = result.realName;
+          }
+          await supabase.from('users').update(updateData).eq('id', currentUser.id);
+        }
+
+        // Cleanup old entries (can run independently)
+        await cleanupOldEntries(username, currentUser?.id);
+      })());
     } else {
       console.log(`[Sync] Skipped: ${skipReason}`);
     }
@@ -275,7 +353,6 @@ export const GET = async (request: Request) => {
     let rawData = dbResult.success ? dbResult.data : [];
 
     // Deduplicate entries (just in case)
-    // Key by start time, end time, and type to ensure uniqueness
     const seen = new Set();
     let finalData = rawData.filter(entry => {
       const key = `${entry.van}-${entry.tot}-${entry.registratiesoort}`;
@@ -295,56 +372,46 @@ export const GET = async (request: Request) => {
     // --- Google Calendar Sync (Self-Healing & Proactive) ---
     let googleSyncResult = { success: false, message: "", error: "" };
     if (finalData.length > 0 && currentUser?.google_access_token) {
-      // Run sync if forced, OR if we don't have a calendar ID yet, OR if we successfully scraped
-      const needsGoogleSync = forceSync || !currentUser.google_calendar_id || isLive;
+      // Trigger if: forced (Vernieuwen), OR just scraped successfully, OR no calendar yet
+      const needsSync = forceSync || isLive || !currentUser.google_calendar_id;
 
-      if (needsGoogleSync) {
+      if (needsSync) {
         try {
-          console.log(`[Google] Triggering sync for user ${username} (isLive: ${isLive}, force: ${forceSync})`);
+          console.log(`[Google] Starting sync for user ${username} (isLive: ${isLive}, force: ${forceSync})...`);
           const { syncEventsToCalendar } = await import('@/lib/google-calendar');
-          
-          // IMPORTANT: Actually await the sync to ensure it completes
-          await syncEventsToCalendar(currentUser.id, finalData);
-          
+
+          // We use waitUntil for the heavy lifting to avoid Vercel timeouts, 
+          // but we provide immediate feedback that it has started.
+          waitUntil((async () => {
+            await syncEventsToCalendar(currentUser.id, finalData, syncLimit);
+            console.log(`[Background] Google Sync completed for ${username}.`);
+          })());
+
           googleSyncResult = {
             success: true,
-            message: `Successfully synced ${finalData.length} events to Google Calendar`,
+            message: `Started sync of ${finalData.length} events to Google Calendar`,
             error: ""
           };
-          console.log(`[Google] Sync completed for user ${username}`);
         } catch (e: any) {
-          const errorMsg = e?.message || String(e);
           googleSyncResult = {
             success: false,
-            message: "Google Calendar sync failed",
-            error: errorMsg
+            message: "Google Calendar sync initialization failed",
+            error: e.message || String(e)
           };
-          console.error(`[Google] Sync Error for ${username}:`, errorMsg);
         }
       } else {
-        console.log(`[Google] Sync not needed: forceSync=${forceSync}, hasCalendarId=${!!currentUser.google_calendar_id}, isLive=${isLive}`);
         googleSyncResult = {
-          success: false,
-          message: "Google Calendar sync not triggered",
-          error: "Conditions not met for sync"
+          success: true,
+          message: "Calendar up to date",
+          error: ""
         };
       }
-    } else {
-      if (!currentUser?.google_access_token) {
-        console.log(`[Google] No Google token for user ${username}`);
-        googleSyncResult = {
-          success: false,
-          message: "Google Calendar not connected",
-          error: "User has not connected their Google account"
-        };
-      } else if (finalData.length === 0) {
-        console.log(`[Google] No data to sync for user ${username}`);
-        googleSyncResult = {
-          success: false,
-          message: "No events to sync",
-          error: "No planning entries available"
-        };
-      }
+    } else if (!currentUser?.google_access_token) {
+      googleSyncResult = {
+        success: false,
+        message: "Google Calendar not connected",
+        error: "Connect your Google account in settings"
+      };
     }
 
     // Return Response

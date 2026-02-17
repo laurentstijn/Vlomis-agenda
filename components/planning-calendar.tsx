@@ -12,6 +12,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Settings,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -126,20 +127,17 @@ const registratieColors: Record<
 };
 
 function getColorForType(type: string) {
-  // Check exact match first
   if (registratieColors[type]) return registratieColors[type];
 
-  // Check valid substrings
   if (type.includes('Verlof') && type.includes('Aangevraagd')) {
     return {
-      bg: "bg-sky-50", // Lighter
+      bg: "bg-sky-50",
       text: "text-sky-600",
-      border: "border-sky-200 border-dashed", // Dashed border for pending
+      border: "border-sky-200 border-dashed",
       label: "Verlof (Aanvraag)",
     };
   }
 
-  // Fallback for compound types like "Dagdienst - Schip" if any
   const knownKeys = Object.keys(registratieColors);
   const match = knownKeys.find(key => type.startsWith(key) || type.includes(key));
 
@@ -161,17 +159,12 @@ function formatTime(date: Date): string {
 
 function parseApiDate(dateStr: string): Date {
   if (!dateStr) return new Date();
-
-  // If it's already an ISO string (e.g., from DB), new Date() can handle it
   if (dateStr.includes("-") && dateStr.includes("T")) {
     return new Date(dateStr);
   }
-
-  // Fallback for Vlomis raw format: DD/MM/YYYY HH:MM
   const normalized = dateStr.replace(/\s+/g, " ").trim();
   const [datePart, timePart] = normalized.split(" ");
   if (!datePart) return new Date();
-
   const [day, month, year] = datePart.split("/").map(Number);
   const [hours, minutes] = (timePart || "00:00").split(":").map(Number);
   return new Date(year, month - 1, day, hours, minutes);
@@ -220,7 +213,6 @@ export function PlanningCalendar() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Load credentials on mount
   useEffect(() => {
     const saved = authStore.getCredentials();
     if (saved) {
@@ -233,7 +225,6 @@ export function PlanningCalendar() {
       toast.success("Google Agenda succesvol gekoppeld!", {
         description: "Je planning wordt nu gesynchroniseerd.",
       });
-      // Trigger a re-validation. The fetcher should ideally check for this state.
       mutate();
       router.replace("/");
     }
@@ -241,17 +232,15 @@ export function PlanningCalendar() {
 
   const handleDisconnect = async () => {
     if (!data?.userId) return;
-
     try {
       const res = await fetch('/api/auth/google/disconnect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: data.userId }),
       });
-
       if (res.ok) {
         toast.success("Google Agenda ontkoppeld.");
-        mutate(); // Refresh the data to update UI
+        mutate();
       } else {
         toast.error("Kon agenda niet ontkoppelen.");
       }
@@ -269,6 +258,7 @@ export function PlanningCalendar() {
     authStore.clearCredentials();
     setCreds(null);
     setIsLoginDialogOpen(true);
+    setIsSettingsOpen(false);
   };
 
   const { data, error, isLoading, mutate } = useSWR(
@@ -280,6 +270,40 @@ export function PlanningCalendar() {
     }
   );
 
+  const handleRefresh = async () => {
+    if (!creds) return;
+    toast.promise(
+      (async () => {
+        const params = new URLSearchParams();
+        params.set("username", creds.username);
+        if (creds.password) params.set("password", creds.password);
+        params.set("force", "true");
+        const res = await fetch(`/api/vlomis?${params.toString()}`);
+        const result = await res.json();
+
+        if (!result.success) {
+          throw new Error(result.error || "Sync mislukt");
+        }
+
+        // If scrape failed (e.g., 429) but we got cached data
+        if (result.scrapeError) {
+          toast.info("Vlomis is momenteel druk. Je ziet de meest recente gegevens uit de database.", {
+            description: result.scrapeError,
+            duration: 5000,
+          });
+        }
+
+        mutate(result, false);
+        return result;
+      })(),
+      {
+        loading: "Planning vernieuwen...",
+        success: "Planning succesvol gecontroleerd!",
+        error: (err: any) => `Vernieuwen mislukt: ${err.message}`,
+      }
+    );
+  };
+
   const planningData = useMemo(() => {
     if (data?.success && data?.data?.length > 0) {
       return convertApiDataToPlanning(data.data);
@@ -288,7 +312,6 @@ export function PlanningCalendar() {
   }, [data]);
 
   const isUsingLiveData = data?.success && data?.data?.length > 0;
-
   const currentMonth = currentDate.getMonth();
   const currentYear = currentDate.getFullYear();
   const daysInMonth = getDaysInMonth(currentYear, currentMonth);
@@ -301,191 +324,166 @@ export function PlanningCalendar() {
   const monthStats = useMemo(() => {
     const stats: Record<string, number> = {};
     planningData.forEach((item) => {
-      if (
-        item.van.getMonth() === currentMonth &&
-        item.van.getFullYear() === currentYear
-      ) {
+      if (item.van.getMonth() === currentMonth && item.van.getFullYear() === currentYear) {
         stats[item.registratiesoort] = (stats[item.registratiesoort] || 0) + 1;
       }
     });
     return stats;
   }, [planningData, currentMonth, currentYear]);
 
-  const prevMonth = () => {
-    setCurrentDate(new Date(currentYear, currentMonth - 1, 1));
-  };
-
-  const nextMonth = () => {
-    setCurrentDate(new Date(currentYear, currentMonth + 1, 1));
-  };
-
-  const goToToday = () => {
-    setCurrentDate(new Date());
-  };
+  const prevMonth = () => setCurrentDate(new Date(currentYear, currentMonth - 1, 1));
+  const nextMonth = () => setCurrentDate(new Date(currentYear, currentMonth + 1, 1));
+  const goToToday = () => setCurrentDate(new Date());
 
   const emptyCells = Array.from({ length: startDay }, (_, i) => i);
 
   return (
     <TooltipProvider>
-      <div className="min-h-screen bg-background p-4 md:p-8">
+      <div className="min-h-screen bg-background p-2 md:p-8">
         <div className="mx-auto max-w-7xl">
           {/* Header */}
-          <Card className="mb-6 border-none shadow-sm">
-            <CardHeader className="pb-4">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <Card className="mb-6 border-none shadow-sm overflow-hidden">
+            <CardHeader className="p-3 md:p-6 pb-2 md:pb-4 space-y-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-                    <Ship className="h-6 w-6 text-primary-foreground" />
+                  <div className="flex h-10 w-10 md:h-12 md:w-12 items-center justify-center rounded-xl bg-primary shrink-0">
+                    <Ship className="h-5 w-5 md:h-6 md:w-6 text-primary-foreground" />
                   </div>
                   <div>
-                    <CardTitle className="text-2xl font-bold text-foreground">
+                    <CardTitle className="text-xl md:text-2xl font-bold text-foreground truncate">
                       Personeelsplanning
                     </CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      Betonning Antwerpen - Zeeschelde
+                    <p className="text-[10px] md:text-sm text-muted-foreground uppercase truncate">
+                      {data?.userDepartment || (isLoading ? "Laden..." : "-")}
                     </p>
                   </div>
                 </div>
 
-                {/* Data status indicator */}
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {isLoading ? (
-                    <Badge variant="secondary" className="gap-1">
+                    <Badge variant="secondary" className="gap-1 text-[10px] md:text-xs h-8">
                       <RefreshCw className="h-3 w-3 animate-spin" />
                       Data laden...
                     </Badge>
                   ) : error ? (
-                    <Badge variant="destructive" className="gap-1">
+                    <Badge variant="destructive" className="gap-1 text-[10px] md:text-xs h-8">
                       <AlertCircle className="h-3 w-3" />
-                      Fout bij ophalen
+                      Fout
                     </Badge>
                   ) : isUsingLiveData ? (
-                    <Badge className="gap-1 bg-emerald-500 text-white">
+                    <Badge className="gap-1 bg-emerald-500 text-white text-[10px] md:text-xs h-8">
                       Live data
                     </Badge>
                   ) : (
-                    <Badge variant="secondary" className="gap-1">
+                    <Badge variant="secondary" className="gap-1 text-[10px] md:text-xs h-8">
                       Lokale data
                     </Badge>
                   )}
+
+                  {data?.lastSyncAt && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge variant="outline" className="gap-1 text-[10px] md:text-xs h-8 border-primary/20 bg-primary/5 text-primary">
+                          <RefreshCw className="h-3 w-3" />
+                          Auto-sync: {new Date(data.lastSyncAt).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Laatste tijdstip dat de agenda op de achtergrond is bijgewerkt: {new Date(data.lastSyncAt).toLocaleString('nl-BE')}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => mutate()}
+                    onClick={handleRefresh}
                     disabled={isLoading || !creds}
+                    className="h-8 md:h-9 px-2 md:px-4"
                   >
-                    <RefreshCw
-                      className={`mr-1 h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
-                    />
-                    Vernieuwen
-                  </Button>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  {creds && (
-                    <div className="flex items-center gap-2">
-                      <div className="hidden flex-col items-end md:flex">
-                        <span className="text-xs font-semibold">{data?.user || creds.username}</span>
-
-                        <div className="flex items-center gap-2">
-                          {data?.googleConnected ? (
-                            <Badge variant="outline" className="h-5 gap-1 border-emerald-200 bg-emerald-50 px-1.5 text-[10px] text-emerald-700 hover:bg-emerald-50 cursor-pointer" onClick={handleDisconnect}>
-                              <CheckCircle2 className="h-3 w-3" />
-                              Agenda gekoppeld (klik om te ontkoppelen)
-                            </Badge>
-                          ) : (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-5 px-2 text-[10px]"
-                              onClick={() => {
-                                if (data?.userId) {
-                                  window.location.href = `/api/auth/google/login?userId=${data.userId}`;
-                                } else {
-                                  toast.error("Gebruikers-ID niet gevonden. Probeer opnieuw in te loggen.");
-                                }
-                              }}
-                            >
-                              <Calendar className="mr-1 h-3 w-3" />
-                              Koppel Google Agenda
-                            </Button>
-                          )}
-
-                          <button
-                            onClick={handleLogout}
-                            className="text-[10px] text-muted-foreground hover:text-destructive underline"
-                          >
-                            Uitloggen
-                          </button>
-                        </div>
-                      </div>
-
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 rounded-full"
-                        onClick={() => setIsSettingsOpen(true)}
-                        title="Instellingen"
-                      >
-                        <Settings className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
-                        <User className="h-4 w-4" />
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-1 rounded-lg border bg-card p-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={prevMonth}
-                      className="h-8 w-8 p-0"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="min-w-[140px] text-center font-semibold">
-                      {MONTHS[currentMonth]} {currentYear}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={nextMonth}
-                      className="h-8 w-8 p-0"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={goToToday}>
-                    <Calendar className="mr-2 h-4 w-4" />
-                    Vandaag
+                    <RefreshCw className={`mr-1 h-3 w-3 md:h-4 md:w-4 ${isLoading ? "animate-spin" : ""}`} />
+                    <span className="text-xs">Vernieuwen</span>
                   </Button>
                 </div>
               </div>
 
-              {/* Employee info */}
-              <div className="mt-4 flex items-center gap-2 rounded-lg bg-muted/50 px-4 py-2">
-                <User className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">
-                  Hoofdschipper (functie gezagvoerder)
-                </span>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pt-2 border-t">
+                {creds ? (
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted shrink-0">
+                      <User className="h-4 w-4" />
+                    </div>
+                    <div className="flex flex-col overflow-hidden">
+                      <span className="text-xs font-semibold truncate leading-none mb-1">{data?.user || creds?.username || "Gebruiker"}</span>
+                      <div className="flex items-center gap-2">
+                        {data?.googleConnected ? (
+                          <Badge variant="outline" className="h-4 gap-0.5 border-emerald-200 bg-emerald-50 px-1 text-[8px] text-emerald-700 hover:bg-emerald-50 cursor-pointer" onClick={handleDisconnect}>
+                            <CheckCircle2 className="h-2 w-2" />
+                            Gekoppeld
+                          </Badge>
+                        ) : (
+                          <button
+                            className="text-[10px] text-primary hover:underline"
+                            onClick={() => data?.userId && (window.location.href = `/api/auth/google/login?userId=${data.userId}`)}
+                          >
+                            Koppel Google
+                          </button>
+                        )}
+                        <button onClick={handleLogout} className="text-[10px] text-muted-foreground hover:text-destructive underline">
+                          Log uit
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 py-1">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted shrink-0">
+                      <Lock className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <span className="text-xs text-muted-foreground italic">Meld je aan om je planning te zien</span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between sm:justify-end gap-2">
+                  <div className="flex items-center gap-1 rounded-lg border bg-card p-1">
+                    <Button variant="ghost" size="sm" onClick={prevMonth} className="h-7 w-7 md:h-8 md:w-8 p-0">
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="min-w-[80px] md:min-w-[120px] text-center font-semibold text-[11px] md:text-sm">
+                      {MONTHS[currentMonth]} {currentYear}
+                    </span>
+                    <Button variant="ghost" size="sm" onClick={nextMonth} className="h-7 w-7 md:h-8 md:w-8 p-0">
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={goToToday} className="h-8 md:h-9">
+                      <Calendar className="mr-0 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
+                      <span className="hidden md:inline">Vandaag</span>
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 md:h-9 md:w-9 rounded-full bg-muted/50"
+                      onClick={() => setIsSettingsOpen(true)}
+                    >
+                      <Settings className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  </div>
+                </div>
               </div>
             </CardHeader>
           </Card>
 
           {/* Legend */}
-          <Card className="mb-6 border-none shadow-sm">
+          <Card className="mb-6 border-none shadow-sm hidden md:block">
             <CardContent className="py-4">
               <div className="flex flex-wrap items-center gap-3">
-                <span className="text-sm font-medium text-muted-foreground">
-                  Legenda:
-                </span>
+                <span className="text-sm font-medium text-muted-foreground">Legenda:</span>
                 {Object.entries(registratieColors).map(([key, value]) => (
-                  <div
-                    key={key}
-                    className={`flex items-center gap-1.5 rounded-full px-3 py-1 ${value.bg} ${value.text} border ${value.border}`}
-                  >
+                  <div key={key} className={`flex items-center gap-1.5 rounded-full px-3 py-1 ${value.bg} ${value.text} border ${value.border}`}>
                     <span className="text-xs font-medium">{value.label}</span>
                   </div>
                 ))}
@@ -494,28 +492,21 @@ export function PlanningCalendar() {
           </Card>
 
           {/* Calendar Grid */}
-          <Card className="mb-6 border-none shadow-sm">
-            <CardContent className="p-4">
-              {/* Weekday headers */}
+          <Card className="mb-6 border-none shadow-sm overflow-hidden">
+            <CardContent className="p-1 md:p-4">
               <div className="mb-2 grid grid-cols-7 gap-1">
                 {WEEKDAYS.map((day) => (
-                  <div
-                    key={day}
-                    className="py-2 text-center text-sm font-semibold text-muted-foreground"
-                  >
+                  <div key={day} className="py-1 md:py-2 text-center text-[10px] md:text-sm font-semibold text-muted-foreground uppercase">
                     {day}
                   </div>
                 ))}
               </div>
 
-              {/* Calendar days */}
               <div className="grid grid-cols-7 gap-1">
-                {/* Empty cells for days before the 1st */}
                 {emptyCells.map((i) => (
-                  <div key={`empty-${i}`} className="min-h-[100px]" />
+                  <div key={`empty-${i}`} className="min-h-[50px] md:min-h-[100px] bg-muted/5 rounded-lg" />
                 ))}
 
-                {/* Actual days */}
                 {daysInMonth.map((day) => {
                   const items = getItemsForDay(day);
                   const isToday = isSameDay(day, new Date());
@@ -524,68 +515,38 @@ export function PlanningCalendar() {
                   return (
                     <div
                       key={day.toISOString()}
-                      className={`min-h-[100px] rounded-lg border p-1.5 transition-all ${isToday
-                        ? "border-primary bg-primary/5 ring-1 ring-primary"
-                        : isWeekend
-                          ? "border-border/50 bg-muted/30"
-                          : "border-border/50 bg-card"
+                      className={`min-h-[60px] md:min-h-[100px] rounded-lg border p-1 md:p-1.5 transition-all flex flex-col ${isToday ? "border-primary bg-primary/5 ring-1 ring-primary" :
+                        isWeekend ? "border-border/50 bg-muted/30" : "border-border/50 bg-card"
                         }`}
                     >
-                      <div
-                        className={`mb-1 text-right text-sm font-medium ${isToday
-                          ? "text-primary"
-                          : isWeekend
-                            ? "text-muted-foreground"
-                            : "text-foreground"
-                          }`}
-                      >
+                      <div className={`mb-1 text-right text-[10px] md:text-sm font-medium ${isToday ? "text-primary font-bold" : isWeekend ? "text-muted-foreground" : "text-foreground"}`}>
                         {day.getDate()}
                       </div>
 
-                      <div className="flex flex-col gap-1">
+                      <div className="flex flex-col gap-0.5 md:gap-1 overflow-hidden">
                         {items.map((item, idx) => {
                           const colors = getColorForType(item.registratiesoort);
-                          const showTime =
-                            item.van.getHours() !== 0 ||
-                            item.van.getMinutes() !== 0;
+                          const showTime = item.van.getHours() !== 0 || item.van.getMinutes() !== 0;
 
                           return (
                             <Tooltip key={idx}>
                               <TooltipTrigger asChild>
-                                <div
-                                  className={`cursor-pointer rounded px-1.5 py-1 text-xs font-medium transition-all hover:scale-[1.02] hover:shadow-sm ${colors.bg} ${colors.text} border ${colors.border}`}
-                                >
-                                  <div className="truncate">{colors.label}</div>
+                                <div className={`cursor-pointer rounded px-1 md:px-1.5 py-0.5 md:py-1 text-[8px] md:text-xs font-medium transition-all hover:scale-[1.02] hover:shadow-sm ${colors.bg} ${colors.text} border ${colors.border} truncate`}>
+                                  <div className="truncate shrink-0">{colors.label}</div>
                                   {showTime && (
-                                    <div className="mt-0.5 text-[10px] opacity-75">
-                                      {formatTime(item.van)} -{" "}
-                                      {formatTime(item.tot)}
+                                    <div className="text-[7px] md:text-[10px] opacity-75 hidden sm:block">
+                                      {formatTime(item.van)}
+                                      <span className="hidden md:inline"> - {formatTime(item.tot)}</span>
                                     </div>
                                   )}
                                 </div>
                               </TooltipTrigger>
-                              <TooltipContent
-                                side="right"
-                                className="max-w-[250px]"
-                              >
+                              <TooltipContent side="right" className="max-w-[250px]">
                                 <div className="space-y-1">
-                                  <p className="font-semibold">
-                                    {item.registratiesoort}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {formatTime(item.van)} -{" "}
-                                    {formatTime(item.tot)}
-                                  </p>
-                                  {item.vaartuig && (
-                                    <p className="text-xs">
-                                      Vaartuig: {item.vaartuig}
-                                    </p>
-                                  )}
-                                  {item.dienst && (
-                                    <p className="text-xs">
-                                      Dienst: {item.dienst}
-                                    </p>
-                                  )}
+                                  <p className="font-semibold">{item.registratiesoort}</p>
+                                  <p className="text-xs text-muted-foreground">{formatTime(item.van)} - {formatTime(item.tot)}</p>
+                                  {item.vaartuig && <p className="text-xs">Vaartuig: {item.vaartuig}</p>}
+                                  {item.dienst && <p className="text-xs">Dienst: {item.dienst}</p>}
                                 </div>
                               </TooltipContent>
                             </Tooltip>
@@ -600,27 +561,20 @@ export function PlanningCalendar() {
           </Card>
 
           {/* Monthly summary */}
-          <Card className="border-none shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">
+          <Card className="border-none shadow-sm mb-8 overflow-hidden">
+            <CardHeader className="p-4 pb-2">
+              <CardTitle className="text-base md:text-lg">
                 Overzicht {MONTHS[currentMonth]}
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
+            <CardContent className="p-4 pt-0">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
                 {Object.entries(monthStats).map(([type, count]) => {
                   const colors = getColorForType(type);
                   return (
-                    <div
-                      key={type}
-                      className={`rounded-lg border p-3 ${colors.bg} ${colors.border}`}
-                    >
-                      <div className={`text-2xl font-bold ${colors.text}`}>
-                        {count}
-                      </div>
-                      <div className={`text-xs font-medium ${colors.text}`}>
-                        {colors.label}
-                      </div>
+                    <div key={type} className={`rounded-lg border p-2 md:p-3 ${colors.bg} ${colors.border}`}>
+                      <div className={`text-xl md:text-2xl font-bold ${colors.text}`}>{count}</div>
+                      <div className={`text-[10px] md:text-xs font-medium ${colors.text}`}>{colors.label}</div>
                     </div>
                   );
                 })}
@@ -628,25 +582,27 @@ export function PlanningCalendar() {
             </CardContent>
           </Card>
 
-          {/* Last updated info */}
           {data?.fetchedAt && (
-            <p className="mt-4 text-center text-xs text-muted-foreground">
-              Laatst bijgewerkt:{" "}
-              {new Date(data.fetchedAt).toLocaleString("nl-BE")}
-            </p>
+            <div className="mt-4 pb-8 text-center space-y-1">
+              <p className="text-[10px] md:text-xs text-muted-foreground">
+                Laatst bijgewerkt: {new Date(data.fetchedAt).toLocaleString("nl-BE")}
+              </p>
+              <p className="text-[10px] md:text-xs text-muted-foreground opacity-60">
+                Historie wordt tot 1 jaar bewaard.
+              </p>
+            </div>
           )}
         </div>
       </div>
-      <LoginDialog
-        isOpen={isLoginDialogOpen}
-        onLoginSuccess={handleLoginSuccess}
-      />
+
+      <LoginDialog isOpen={isLoginDialogOpen} onLoginSuccess={handleLoginSuccess} />
 
       {creds && (
         <SyncSettingsDialog
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
           username={creds.username}
+          onLogout={handleLogout}
         />
       )}
     </TooltipProvider>

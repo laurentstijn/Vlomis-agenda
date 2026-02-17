@@ -1,8 +1,8 @@
 {
     "crons": [
         {
-            "path": "/api/vlomis",
-            "schedule": "0 6 * * *"
+            "path": "/api/sync/cron",
+            "schedule": "0 * * * *"
         }
     ]
 }

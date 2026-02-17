@@ -16,11 +16,11 @@ export interface User {
  */
 export async function getOrCreateUser(username: string, password?: string): Promise<{ success: boolean; user?: User; error?: string }> {
     try {
-        // 1. Try to find existing user
+        // 1. Try to find existing user (Case-insensitive)
         const { data: existingUser, error: findError } = await supabase
             .from('users')
             .select('*')
-            .eq('vlomis_username', username)
+            .ilike('vlomis_username', username)
             .single()
 
         if (findError && findError.code !== 'PGRST116') { // PGRST116 is code for "no rows found"

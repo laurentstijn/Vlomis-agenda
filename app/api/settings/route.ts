@@ -56,11 +56,11 @@ export async function POST(request: Request) {
             );
         }
 
-        // Validate interval (minimum 30 mins)
+        // Validate interval (minimum 1 min for testing)
         const interval = parseInt(sync_interval_minutes);
-        if (isNaN(interval) || interval < 15) {
+        if (isNaN(interval) || interval < 1) {
             return NextResponse.json(
-                { success: false, error: "Minimum interval is 15 minutes" },
+                { success: false, error: "Minimum interval is 1 minute" },
                 { status: 400 }
             );
         }

@@ -81,10 +81,10 @@ export async function getGoogleClientForUser(userId: string) {
   return userClient;
 }
 
-export async function syncEventsToCalendar(userId: string, events: any[]) {
+export async function syncEventsToCalendar(userId: string, events: any[], limit: number = 40) {
   try {
     console.log(`[syncEventsToCalendar] Starting sync for user ${userId} with ${events.length} events`);
-    
+
     const auth = await getGoogleClientForUser(userId);
     const calendar = google.calendar({ version: 'v3', auth });
 
@@ -116,21 +116,22 @@ export async function syncEventsToCalendar(userId: string, events: any[]) {
       }
     }
 
-    if (calendarId === 'primary') {
+    if (calendarId === 'primary' || !calendarId) {
       // Check if "Vlomis Planning" already exists in user's calendar list
       try {
-        console.log('[syncEventsToCalendar] Checking for existing Vlomis Planning calendar...');
-        const calendarList = await calendar.calendarList.list();
+        console.log('[Sync] Searching for dedicated Vlomis Planning calendar...');
+        const calendarList = await calendar.calendarList.list({ minAccessRole: 'writer' });
+
         const existingCalendar = calendarList.data.items?.find(
           c => c.summary === 'Vlomis Planning'
         );
 
         if (existingCalendar?.id) {
           calendarId = existingCalendar.id;
-          console.log(`[syncEventsToCalendar] Found existing Vlomis Planning calendar: ${calendarId}`);
+          console.log(`[Sync] Found existing Vlomis Planning calendar: ${calendarId}`);
         } else {
           // Create new calendar
-          console.log('[syncEventsToCalendar] Creating new Vlomis Planning calendar...');
+          console.log('[Sync] Creating new Vlomis Planning calendar...');
           const newCalendar = await calendar.calendars.insert({
             requestBody: {
               summary: 'Vlomis Planning',
@@ -141,163 +142,179 @@ export async function syncEventsToCalendar(userId: string, events: any[]) {
 
           if (newCalendar.data.id) {
             calendarId = newCalendar.data.id;
-            console.log(`[syncEventsToCalendar] Created new calendar: ${calendarId}`);
+            console.log(`[Sync] Created new Vlomis calendar: ${calendarId}`);
           }
         }
 
-        // Save this ID to the user record for future use
-        if (calendarId !== 'primary') {
-          await supabase
+        // CRITICAL: Save this ID to the user record IMMEDIATELY
+        if (calendarId && calendarId !== 'primary') {
+          console.log(`[Sync] Persisting calendar ID ${calendarId} to user ${userId}`);
+          const { error: updateError } = await supabase
             .from('users')
             .update({ google_calendar_id: calendarId })
             .eq('id', userId);
-          console.log(`[syncEventsToCalendar] Saved calendar ID to user record`);
+
+          if (updateError) {
+            console.error(`[Sync] FAILED to save calendar ID to DB: ${updateError.message}`);
+          }
         }
       } catch (err) {
-        console.error('[syncEventsToCalendar] Error finding/creating calendar, falling back to primary:', err);
-        calendarId = 'primary';
+        console.error('[Sync] Error in calendar setup:', err);
+        // Fallback to primary only as last resort, but log it clearly
+        if (calendarId === 'primary') {
+          console.warn('[Sync] FATAL: Could not prepare dedicated calendar, using primary.');
+        }
       }
     }
 
-    // For each planning entry from Vlomis
-    console.log(`[syncEventsToCalendar] Processing ${events.length} events for calendar ${calendarId}`);
-    
-    for (const entry of events) {
-      // User request: Filter out 'Reserve' and 'Rust' (skip them)
-      const type = entry.registratiesoort || '';
-      if (type.includes('Reserve') || type.includes('Rust')) {
-        console.log(`[syncEventsToCalendar] Skipping ${type} entry`);
-        continue;
-      }
-
-      // Add a small delay to avoid rate limits (every 5 events, not every event)
-      if (events.indexOf(entry) % 5 === 0) {
-        await new Promise(r => setTimeout(r, 200));
-      }
-
-      const eventId = crypto.createHash('sha256').update(entry.vlomis_entry_id).digest('hex');
-
-      // Determine if it has specific hours (not 00:00 - 00:00)
-      const hasSpecificHours = !entry.van.includes('T00:00:00');
-
-      let summary = type;
-
-      if (hasSpecificHours) {
-        // Format: "Dagdienst - Zeeschelde (08:00 - 20:00)"
-        // Extract hours (use UTC to get "face value" since we stored it as UTC)
-        const formatTime = (isoString: string) => {
-          if (!isoString) return '';
-          const date = new Date(isoString);
-          return `${date.getUTCHours().toString().padStart(2, '0')}:${date.getUTCMinutes().toString().padStart(2, '0')}`;
-        };
-        const timeRange = `${formatTime(entry.van)} - ${formatTime(entry.tot)}`;
-
-        // Add Vessel and Time to title
-        summary = `${type} - ${entry.vaartuig || entry.functie} (${timeRange})`;
-      } else {
-        // For non-timed events (like Verlof), just keep the type or maybe type + vessel if relevant?
-        // User said: "enkel met de scheepsnaam erbij als er uren zijn ingevuld"
-        // So for Verlof (which is usually all day), we likely just want "Verlof"
-        // But let's check if Verlof has a vessel? Usually not.
-        if (entry.vaartuig) {
-          // Maybe user wants vessel for Verlof too? "als er uren zijn ingevuld" implies conditional.
-          // Let's stick to strict interpretation: No vessel in title if no hours.
-          summary = type;
-        }
-      }
-
-      // Special case for "Verlof" - we can't detect "pending" (trash can) reliable from current scraper
-      // as we don't scrape attributes. We'll leave it as is for now or maybe mark all as "Verlof"
-
-      const description = `
-        Vaartuig: ${entry.vaartuig}
-        Functie: ${entry.functie}
-        Afdeling: ${entry.afdeling}
-        Type: ${entry.registratiesoort}
-      `.trim();
-
-      // Map Vlomis types to Google Calendar colors (approximate)
-      // User request 14/02: "kan ik de google agenda alles een kleur hebben"
-      // We will now REMOVE specific colorIds so events inherit the CALENDAR's color.
-      // This allows the user to pick one color for the whole "Vlomis Planning" calendar in Google UI.
-
-      /* 
-      // PREVIOUS COLOR LOGIC (Disabled for uniformity)
-      let colorId = '8'; // Default Graphite
-      if (type.includes('Dagdienst')) colorId = '10'; // Green
-      else if (type.includes('Reserve')) colorId = '6'; // Orange/Yellow-ish
-      else if (type.includes('Rust')) colorId = '8'; // Gray
-      else if (type.includes('Ziekte')) colorId = '11'; // Red
-      else if (type.includes('Verlof')) colorId = '7'; // Blue
-      else if (type.includes('Vorming')) colorId = '3'; // Purple
-      */
-
-      // Check for All-Day event
-      // User requested ALL events to be all-day
-      const isAllDay = true; // entry.van.includes('T00:00:00') && entry.tot.includes('T00:00:00');
-
-      let start: any, end: any;
-      if (isAllDay) {
-        // For all day, use YYYY-MM-DD
-        // entry.van is '2026-03-23T00:00:00+00:00' -> split to get date
-        start = { date: entry.van.split('T')[0] };
-
-        // Google Calendar end date for all-day is exclusive (next day)
-        // Check if data from Vlomis is already next day or same day.
-        // Usually Vlomis 'tot' for a single day 'Reserve' is the NEXT day 00:00.
-        // e.g. van 23/03 00:00, tot 24/03 00:00 -> This is exactly 1 day.
-        end = { date: entry.tot.split('T')[0] };
-
-        // If van and tot date strings are same, we must bump tot by 1 day for Google
-        if (start.date === end.date) {
-          const dt = new Date(entry.tot);
-          dt.setDate(dt.getDate() + 1);
-          end = { date: dt.toISOString().split('T')[0] };
-        }
-      } else {
-        start = { dateTime: entry.van };
-        end = { dateTime: entry.tot };
-      }
-
-      const eventResource = {
-        summary,
-        description,
-        start,
-        end,
-        // colorId, // Disabled to use default calendar color
-        id: eventId, // Try to reuse ID to update existing events
-        reminders: {
-          useDefault: true,
-        },
-      };
-
+    // 4. SMART CLEANUP: Instead of wiping, we fetch existing events and only delete what is no longer needed
+    if (calendarId && calendarId !== 'primary') {
       try {
-        // Try to insert (will fail if ID exists)
-        await calendar.events.insert({
-          calendarId,
-          requestBody: eventResource,
-        });
-        console.log(`[syncEventsToCalendar] Created event: ${summary} (${start.date || start.dateTime})`);
-      } catch (e: any) {
-        if (e.code === 409) {
-          // Event exists, update it
-          try {
-            await calendar.events.update({
-              calendarId,
-              eventId: eventResource.id,
-              requestBody: eventResource,
-            });
-            console.log(`[syncEventsToCalendar] Updated event: ${summary}`);
-          } catch (updateErr: any) {
-            console.error(`[syncEventsToCalendar] Error updating event ${eventId}:`, updateErr.message || updateErr);
+        console.log(`[Sync] Fetching existing events in calendar ${calendarId} for smart diffing...`);
+        const eventsRes = await calendar.events.list({ calendarId, maxResults: 1000 });
+        const existingEvents = eventsRes.data.items || [];
+
+        // Generate a set of current event IDs that SHOULD exist
+        const currentEventIds = new Set(events.map(entry => {
+          const syncId = entry.vlomis_entry_id || `${entry.medewerker}-${entry.van}-${entry.registratiesoort}`;
+          return crypto.createHash('sha256').update(syncId).digest('hex');
+        }));
+
+        const eventsToDelete = existingEvents.filter(ev => ev.id && !currentEventIds.has(ev.id));
+
+        if (eventsToDelete.length > 0) {
+          console.log(`[Sync] Found ${eventsToDelete.length} stale events to remove.`);
+          for (const ev of eventsToDelete) {
+            if (ev.id) {
+              await calendar.events.delete({ calendarId, eventId: ev.id });
+            }
           }
+          console.log('[Sync] Smart cleanup complete.');
         } else {
-          console.error(`[syncEventsToCalendar] Error inserting event ${eventId} (${summary}):`, e.message || e);
+          console.log('[Sync] No stale events found. Skipping cleanup.');
         }
+      } catch (err: any) {
+        console.warn(`[Sync] Smart cleanup failed/skipped: ${err.message}`);
       }
     }
-  } catch (error) {
-    console.error('Error syncing to calendar:', error);
+
+    // Sort events so upcoming ones are processed first
+    const now = new Date();
+    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const threeMonthsFromNow = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+
+    const sortedEvents = [...events].sort((a, b) => {
+      const dateA = new Date(a.van).getTime();
+      const dateB = new Date(b.van).getTime();
+
+      // If one is in the "priority window" and other isn't, prioritize it
+      const inWindowA = dateA >= oneWeekAgo.getTime() && dateA <= threeMonthsFromNow.getTime();
+      const inWindowB = dateB >= oneWeekAgo.getTime() && dateB <= threeMonthsFromNow.getTime();
+
+      if (inWindowA && !inWindowB) return -1;
+      if (!inWindowA && inWindowB) return 1;
+
+      // Otherwise sort normally by date
+      return dateA - dateB;
+    });
+
+    console.log(`[Sync] Starting prioritized sync for user ${userId}. Total potential events: ${events.length}. Calendar: ${calendarId}`);
+
+    const BATCH_SIZE = 10;
+    let processedCount = 0;
+    const MAX_SYNC = limit;
+
+    for (let i = 0; i < sortedEvents.length; i += BATCH_SIZE) {
+      if (processedCount >= MAX_SYNC) break;
+
+      const batch = sortedEvents.slice(i, Math.min(i + BATCH_SIZE, sortedEvents.length));
+
+      for (const entry of batch) {
+        if (processedCount >= MAX_SYNC) break;
+
+        const type = entry.registratiesoort || '';
+        // Skip Rust and Reserve entries as per user request
+        if (type.includes('Rust') || type.includes('Reserve')) continue;
+
+        const syncId = entry.vlomis_entry_id || `${entry.medewerker}-${entry.van}-${entry.registratiesoort}`;
+        const eventId = crypto.createHash('sha256').update(syncId).digest('hex');
+
+        // Environment-independent time formatting (always Brussels local)
+        const formatTimeBrussels = (isoString: string) => {
+          const dateObj = new Date(isoString);
+          const m = dateObj.getUTCMonth();
+          const d = dateObj.getUTCDate();
+          const h = dateObj.getUTCHours();
+
+          let offset = 1;
+          if (m > 2 && m < 9) offset = 2;
+          else if (m === 2) {
+            const lastSun = d - dateObj.getUTCDay();
+            if (lastSun > 25 || (lastSun === 25 && h >= 1)) offset = 2;
+          } else if (m === 9) {
+            const lastSun = d - dateObj.getUTCDay();
+            if (lastSun < 25 || (lastSun === 25 && h < 1)) offset = 2;
+          }
+
+          const localHours = (h + offset) % 24;
+          const localMins = dateObj.getUTCMinutes();
+          return `${String(localHours).padStart(2, '0')}:${String(localMins).padStart(2, '0')}`;
+        };
+
+        const vesselOrFunction = entry.vaartuig || entry.functie || '';
+        const timeRange = entry.van.includes('T') ? ` (${formatTimeBrussels(entry.van)} - ${formatTimeBrussels(entry.tot)})` : '';
+        const summary = `${type}${vesselOrFunction ? ` - ${vesselOrFunction}` : ''}${timeRange}`;
+
+        const description = `Vaartuig: ${entry.vaartuig}\nFunctie: ${entry.functie}\nAfdeling: ${entry.afdeling}`.trim();
+
+        const localDate = entry.date;
+        const start = { date: localDate };
+        const dt = new Date(localDate);
+        dt.setDate(dt.getDate() + 1);
+        const end = { date: dt.toISOString().split('T')[0] };
+
+        const eventResource = {
+          summary,
+          description,
+          start,
+          end,
+          id: eventId,
+          reminders: { useDefault: true },
+          transparency: 'transparent'
+        };
+
+        try {
+          await calendar.events.insert({
+            calendarId,
+            requestBody: eventResource,
+          });
+          processedCount++;
+        } catch (e: any) {
+          if (e.code === 409) {
+            try {
+              await calendar.events.update({
+                calendarId,
+                eventId: eventId,
+                requestBody: eventResource,
+              });
+              processedCount++;
+            } catch (upErr: any) {
+              console.error(`[Sync] Update failed for ${eventId}:`, upErr.message);
+            }
+          } else {
+            console.error(`[Sync] Insert failed for ${eventId}:`, e.message);
+          }
+        }
+
+        // Small delay per event
+        await new Promise(r => setTimeout(r, 50));
+      }
+      // Breather between batches
+      await new Promise(r => setTimeout(r, 200));
+    }
+    console.log(`[Sync] Finished. Processed ${processedCount} relevant events.`);
+  } catch (error: any) {
+    console.error('[Sync] Fatal Error:', error);
     throw error;
   }
 }

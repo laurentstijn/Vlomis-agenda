@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import {
     Select,
     SelectContent,
@@ -19,13 +18,14 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Settings } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import useSWR from "swr";
 
 interface SyncSettingsDialogProps {
     isOpen: boolean;
     onClose: () => void;
     username: string;
+    onLogout?: () => void;
 }
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -34,6 +34,7 @@ export function SyncSettingsDialog({
     isOpen,
     onClose,
     username,
+    onLogout,
 }: SyncSettingsDialogProps) {
     const [interval, setInterval] = useState("60");
     const [isSaving, setIsSaving] = useState(false);
@@ -96,7 +97,8 @@ export function SyncSettingsDialog({
                                     <SelectValue placeholder="Kies interval" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="15">Elke 15 minuten (Test)</SelectItem>
+                                    <SelectItem value="1">Elke minuut (Test)</SelectItem>
+                                    <SelectItem value="15">Elke 15 minuten</SelectItem>
                                     <SelectItem value="30">Elke 30 minuten</SelectItem>
                                     <SelectItem value="60">Elk uur</SelectItem>
                                     <SelectItem value="120">Elke 2 uur</SelectItem>
@@ -114,12 +116,27 @@ export function SyncSettingsDialog({
                         </div>
                     )}
                 </div>
-                <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={onClose}>Annuleren</Button>
-                    <Button onClick={handleSave} disabled={isSaving || isLoading}>
-                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Opslaan
-                    </Button>
+
+                <div className="flex flex-col gap-3 pt-2">
+                    <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={onClose}>Annuleren</Button>
+                        <Button onClick={handleSave} disabled={isSaving || isLoading}>
+                            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Opslaan
+                        </Button>
+                    </div>
+
+                    {onLogout && (
+                        <div className="pt-3 mt-1 border-t">
+                            <Button
+                                variant="ghost"
+                                className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 h-10"
+                                onClick={onLogout}
+                            >
+                                Uitloggen
+                            </Button>
+                        </div>
+                    )}
                 </div>
             </DialogContent>
         </Dialog>
