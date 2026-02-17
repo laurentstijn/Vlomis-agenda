@@ -2,23 +2,38 @@
 export interface AuthCredentials {
     username: string;
     password?: string;
+    expiresAt?: number; // Timestamp in milliseconds
 }
 
 const STORAGE_KEY = 'vlomis_auth';
+const SESSION_DURATION = 4 * 60 * 60 * 1000; // 4 hours
 
 export const authStore = {
     saveCredentials: (creds: AuthCredentials) => {
         if (typeof window !== 'undefined') {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(creds));
+            const dataWithExpiry = {
+                ...creds,
+                expiresAt: Date.now() + SESSION_DURATION
+            };
+            // Use sessionStorage for "logout on close" behavior
+            sessionStorage.setItem(STORAGE_KEY, JSON.stringify(dataWithExpiry));
         }
     },
 
     getCredentials: (): AuthCredentials | null => {
         if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem(STORAGE_KEY);
+            const saved = sessionStorage.getItem(STORAGE_KEY);
             if (saved) {
                 try {
-                    return JSON.parse(saved);
+                    const creds: AuthCredentials = JSON.parse(saved);
+
+                    // Check if session has expired
+                    if (creds.expiresAt && Date.now() > creds.expiresAt) {
+                        sessionStorage.removeItem(STORAGE_KEY);
+                        return null;
+                    }
+
+                    return creds;
                 } catch (e) {
                     return null;
                 }
@@ -29,7 +44,7 @@ export const authStore = {
 
     clearCredentials: () => {
         if (typeof window !== 'undefined') {
-            localStorage.removeItem(STORAGE_KEY);
+            sessionStorage.removeItem(STORAGE_KEY);
         }
     }
 };
