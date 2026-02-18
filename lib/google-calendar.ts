@@ -194,7 +194,9 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
 
       const vesselOrFunction = entry.vaartuig || entry.functie || '';
       const timeRange = entry.van.includes('T') ? ` (${formatTimeBrussels(entry.van)} - ${formatTimeBrussels(entry.tot)})` : '';
-      const summary = `${type}${vesselOrFunction ? ` - ${vesselOrFunction}` : ''}${timeRange}`;
+      const summary = vesselOrFunction
+        ? `${vesselOrFunction} - ${type}${timeRange}`
+        : `${type}${timeRange}`;
       const description = `Vaartuig: ${entry.vaartuig}\nFunctie: ${entry.functie}\nAfdeling: ${entry.afdeling}`.trim();
 
       const localDate = entry.date;
