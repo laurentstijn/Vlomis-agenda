@@ -366,7 +366,7 @@ export function PlanningCalendar() {
                       Personeelsplanning
                     </CardTitle>
                     <p className="text-[10px] md:text-sm text-muted-foreground uppercase truncate">
-                      {data?.userDepartment || (isLoading ? "Laden..." : "-")}
+                      {data?.userFunction || data?.userDepartment || (isLoading ? "Laden..." : "-")}
                     </p>
                   </div>
                 </div>

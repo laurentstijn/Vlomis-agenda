@@ -447,6 +447,14 @@ async function handleRequest(request: Request) {
       };
     }
 
+    // Extract metadata from the latest data if available
+    const latestEntry = finalData.length > 0 ? finalData[0] : null;
+    const userFunction = latestEntry?.functie || "";
+    const userDepartment = latestEntry?.afdeling || "";
+
+    // Debug: Log the outcome
+    console.log(`[API] Response for ${username}: ${finalData.length} entries. Function: ${userFunction}, Dept: ${userDepartment}. Scrape: ${scrapeSuccess ? 'OK' : 'Fail/Skip'}`);
+
     // Return Response
     return NextResponse.json({
       success: true,
@@ -459,6 +467,8 @@ async function handleRequest(request: Request) {
       historicalFrom: firstDate,
       user: currentUser?.display_name || username,
       userId: currentUser?.id,
+      userFunction,
+      userDepartment,
       googleConnected: !!currentUser?.google_access_token,
       googleSync: googleSyncResult,
       debug: debugLogs,
