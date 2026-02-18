@@ -64,13 +64,21 @@ export async function GET(request: Request) {
                         continue;
                     }
 
-                    // Trigger the existing VLOMIS endpoint with force=true
-                    // We call it internally using the app URL
+                    // Trigger the existing VLOMIS endpoint with force=true (POST)
                     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-                    const syncUrl = `${appUrl}/api/vlomis?username=${encodeURIComponent(user.vlomis_username)}&password=${encodeURIComponent(password)}&force=true&limit=500`;
+                    const syncUrl = `${appUrl}/api/vlomis`;
 
                     console.log(`[BatchSync] Triggering sync for ${user.vlomis_username}...`);
-                    const response = await fetch(syncUrl);
+                    const response = await fetch(syncUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            username: user.vlomis_username,
+                            password: password,
+                            force: true,
+                            limit: 500
+                        })
+                    });
                     const data = await response.json();
 
                     results.push({

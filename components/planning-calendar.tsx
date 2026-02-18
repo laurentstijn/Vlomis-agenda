@@ -261,6 +261,14 @@ export function PlanningCalendar() {
     setIsSettingsOpen(false);
   };
 
+  const fetcher = ([url, username, password]: [string, string?, string?]) => {
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    }).then((res) => res.json());
+  };
+
   const { data, error, isLoading, mutate } = useSWR(
     creds ? ["/api/vlomis", creds.username, creds.password] : null,
     fetcher,
@@ -274,11 +282,15 @@ export function PlanningCalendar() {
     if (!creds) return;
     toast.promise(
       (async () => {
-        const params = new URLSearchParams();
-        params.set("username", creds.username);
-        if (creds.password) params.set("password", creds.password);
-        params.set("force", "true");
-        const res = await fetch(`/api/vlomis?${params.toString()}`);
+        const res = await fetch(`/api/vlomis`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: creds.username,
+            password: creds.password,
+            force: true
+          })
+        });
         const result = await res.json();
 
         if (!result.success) {

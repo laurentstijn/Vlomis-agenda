@@ -38,7 +38,11 @@ export function LoginDialog({ isOpen, onLoginSuccess }: LoginDialogProps) {
 
         try {
             // Test the credentials against our API
-            const res = await fetch(`/api/vlomis?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`);
+            const res = await fetch(`/api/vlomis`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
             const data = await res.json();
 
             if (data.success) {

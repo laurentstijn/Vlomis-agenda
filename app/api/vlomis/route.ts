@@ -257,20 +257,36 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
   }
 }
 
-export const GET = async (request: Request) => {
+// Shared logic for both GET and POST
+async function handleRequest(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const usernameParam = searchParams.get('username');
-    const passwordParam = searchParams.get('password');
-    const forceSync = searchParams.get('force') === 'true';
-    const limitParam = searchParams.get('limit');
-    const syncLimit = limitParam ? parseInt(limitParam) : 500;
+    let usernameParam: string | null = null;
+    let passwordParam: string | null = null;
+    let forceSync = false;
+    let syncLimit = 500;
+
+    // Handle both GET (URL) and POST (JSON)
+    if (request.method === 'POST') {
+      const body = await request.json();
+      usernameParam = body.username;
+      passwordParam = body.password;
+      forceSync = body.force === true;
+      if (body.limit) syncLimit = parseInt(body.limit);
+    } else {
+      const { searchParams } = new URL(request.url);
+      usernameParam = searchParams.get('username');
+      passwordParam = searchParams.get('password');
+      forceSync = searchParams.get('force') === 'true';
+      const limitParam = searchParams.get('limit');
+      if (limitParam) syncLimit = parseInt(limitParam);
+    }
 
     const { savePlanningEntries, getPlanningEntries, getFirstDataDate, cleanupOldEntries } = await import('@/lib/planning-db');
     const { getOrCreateUser } = await import('@/lib/user-db');
     const { supabase } = await import('@/lib/supabase');
+    const { decrypt } = await import('@/lib/encryption');
 
-    console.log(`[API] GET /api/vlomis params: usernameParam=${usernameParam}, forceSync=${forceSync}`);
+    console.log(`[API] ${request.method} /api/vlomis for user: ${usernameParam}`);
 
     // 1. Identify User
     let currentUser: any = null;
@@ -278,6 +294,9 @@ export const GET = async (request: Request) => {
     let password = passwordParam || '';
 
     if (usernameParam) {
+      // If we received a potential password, try to use it.
+      // NOTE: getOrCreateUser expects a RAW password to encrypt it if new.
+      // If we are coming from the CRON, we might be passing an already decrypted one, or raw.
       const userResult = await getOrCreateUser(usernameParam, passwordParam || undefined);
       if (userResult.success) currentUser = userResult.user;
     }
@@ -285,6 +304,16 @@ export const GET = async (request: Request) => {
     // CRITICAL: Ensure 'username' variable reflects the identified user
     if (currentUser?.vlomis_username) {
       username = currentUser.vlomis_username;
+    }
+
+    // SECURITY: Decrypt stored password if logic requires it
+    // If no password provided in request, try to get it from DB
+    if (!password && currentUser?.vlomis_password) {
+      try {
+        password = decrypt(currentUser.vlomis_password);
+      } catch (e) {
+        console.error('[API] Failed to decrypt stored password:', e);
+      }
     }
 
     console.log(`[API] Identified User: ${username} (ID: ${currentUser?.id || 'null'})`);
@@ -345,7 +374,7 @@ export const GET = async (request: Request) => {
         }
       })());
     } else {
-      console.log(`[Sync] Skipped: ${skipReason}`);
+      // console.log(`[Sync] Skipped: ${skipReason}`);
     }
 
     // 4. ALWAYS Fetch from DB (Single Source of Truth + Cache)
@@ -444,4 +473,7 @@ export const GET = async (request: Request) => {
       details: error.message
     }, { status: 500 });
   }
-};
+}
+
+export const GET = handleRequest;
+export const POST = handleRequest;
