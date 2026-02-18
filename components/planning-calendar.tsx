@@ -337,7 +337,8 @@ export function PlanningCalendar() {
     const stats: Record<string, number> = {};
     planningData.forEach((item) => {
       if (item.van.getMonth() === currentMonth && item.van.getFullYear() === currentYear) {
-        stats[item.registratiesoort] = (stats[item.registratiesoort] || 0) + 1;
+        const key = item.registratiesoort.trim();
+        stats[key] = (stats[key] || 0) + 1;
       }
     });
     return stats;

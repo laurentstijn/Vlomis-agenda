@@ -213,7 +213,7 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
           results.push({
             vlomis_entry_id: `${uname}-${ISOdate}-${registratiesoort}-${stableVanTime}`,
             date: ISOdate,
-            registratiesoort: registratiesoort,
+            registratiesoort: registratiesoort.trim(),
             van: vanUTC,
             tot: totUTC,
             medewerker: uname,
@@ -276,6 +276,8 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
       return name;
     };
     const realName = formatName(rawRealName);
+
+    console.log(`[Scraper] Extracted raw name: '${rawRealName}', Formatted to: '${realName}'`);
 
     const realFunctie = entries.length > 0 ? entries[0].functie : undefined;
 
