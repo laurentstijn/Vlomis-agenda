@@ -297,7 +297,6 @@ async function handleRequest(request: Request) {
     let usernameParam: string | null = null;
     let passwordParam: string | null = null;
     let forceSync = false;
-    let simulateAdd = false;
     let syncLimit = 500;
 
     // Handle both GET (URL) and POST (JSON)
@@ -306,14 +305,12 @@ async function handleRequest(request: Request) {
       usernameParam = body.username;
       passwordParam = body.password;
       forceSync = body.force === true;
-      simulateAdd = body.simulate_add === true;
       if (body.limit) syncLimit = parseInt(body.limit);
     } else {
       const { searchParams } = new URL(request.url);
       usernameParam = searchParams.get('username');
       passwordParam = searchParams.get('password');
       forceSync = searchParams.get('force') === 'true';
-      simulateAdd = searchParams.get('simulate_add') === 'true';
       const limitParam = searchParams.get('limit');
       if (limitParam) syncLimit = parseInt(limitParam);
     }
@@ -381,24 +378,6 @@ async function handleRequest(request: Request) {
         isLive = true;
       } else {
         console.error(`[Sync] Scrape failed: ${result.error}`);
-      }
-
-      // SIMULATION: Inject fake event if requested (Block Luc explicitly)
-      if (simulateAdd && !username.toLowerCase().includes('ostae')) {
-        console.log(`[Simulation] Injecting fake event for ${username}`);
-        liveData.push({
-          vlomis_entry_id: `SIMULATED-${Date.now()}`,
-          date: new Date().toISOString().split('T')[0],
-          registratiesoort: 'TEST MELDING 🔔',
-          van: new Date().toISOString(),
-          tot: new Date(Date.now() + 3600 * 1000).toISOString(),
-          medewerker: username,
-          functie: 'Test',
-          afdeling: 'Simulatie',
-          vaartuig: 'TEST'
-        });
-        isLive = true;
-        scrapeSuccess = true;
       }
 
       // --- BACKGROUND PERSISTENT TASKS ---
@@ -521,7 +500,7 @@ async function handleRequest(request: Request) {
       isLive,
       skipped: !shouldScrape,
       message: shouldScrape
-        ? (scrapeSuccess ? "Live sync successful" : "Scrape failed, showing cached")
+        ? (scrapeSuccess ? "Vlomis data refreshed" : "Scrape failed, showing cached")
         : "Sync skipped (cached)",
       historicalFrom: firstDate,
       user: currentUser?.display_name || username,
