@@ -138,7 +138,8 @@ function getColorForType(type: string) {
     };
   }
 
-  const knownKeys = Object.keys(registratieColors);
+  // Sort keys by length descending to match "Dagdienst kantooruren" before "Dagdienst"
+  const knownKeys = Object.keys(registratieColors).sort((a, b) => b.length - a.length);
   const match = knownKeys.find(key => type.startsWith(key) || type.includes(key));
 
   if (match) return registratieColors[match];
@@ -337,7 +338,9 @@ export function PlanningCalendar() {
     const stats: Record<string, number> = {};
     planningData.forEach((item) => {
       if (item.van.getMonth() === currentMonth && item.van.getFullYear() === currentYear) {
-        const key = item.registratiesoort.trim();
+        // Group by the helper label -> Consolidates "Dagdienst" and "Dagdienst 8-16"
+        const colorConfig = getColorForType(item.registratiesoort);
+        const key = colorConfig.label;
         stats[key] = (stats[key] || 0) + 1;
       }
     });
