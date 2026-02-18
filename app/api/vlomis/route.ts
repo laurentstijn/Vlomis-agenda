@@ -232,15 +232,47 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
       return el ? el.value.trim() : null;
     });
 
-    // Format "LAURENT Stijn" -> "Stijn Laurent"
+    // Format "VAN OSTAEYEN Luc" -> "Luc Van Ostaeyen"
     const formatName = (name: string | null) => {
       if (!name) return null;
-      const parts = name.split(" ");
-      if (parts.length >= 2) {
-        const last = parts[0].charAt(0) + parts[0].slice(1).toLowerCase();
-        const first = parts.slice(1).join(" ");
+      const parts = name.trim().split(/\s+/);
+
+      // Heuristic: Vlomis uses ALL CAPS for surname parts, Title Case for first name
+      const surnameParts: string[] = [];
+      const firstnameParts: string[] = [];
+
+      for (const part of parts) {
+        // Check if fully uppercase (and length > 1 or common prefix like VAN)
+        // Or if simple check: is equal to uppercase version?
+        // But some names like "DE" or "LE" are short.
+        if (part === part.toUpperCase() && /[A-Z]/.test(part)) {
+          surnameParts.push(part);
+        } else {
+          firstnameParts.push(part);
+        }
+      }
+
+      const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+
+      // If we found both parts, format nicely
+      if (surnameParts.length > 0 && firstnameParts.length > 0) {
+        const first = firstnameParts.join(" ");
+        const last = surnameParts.map(titleCase).join(" ");
         return `${first} ${last}`;
       }
+
+      // Fallback for simple 2-part names if heuristic fails (e.g. all caps or all lower)
+      if (parts.length >= 2) {
+        // Assume standard "Last First" order from Vlomis
+        // Take all but last word as Surname? Or first as Surname?
+        // Vlomis standard: "ACHTERNAAM Voornaam"
+        const last = parts[0];
+        const first = parts.slice(1).join(" ");
+        // This was the old buggy logic, but better than nothing for "simple" names
+        // Actually, if we are here, likely the Case detection failed.
+        return name;
+      }
+
       return name;
     };
     const realName = formatName(rawRealName);
