@@ -40,7 +40,8 @@ export async function GET(request: Request) {
         for (const user of users) {
             // 2. Determine if user needs sync
             let shouldSync = false;
-            const interval = user.sync_interval_minutes || 30; // Default to 30 mins
+            // ENFORCED: 6 hours (360 minutes) for everyone, regardless of DB setting
+            const interval = 360;
 
             if (!user.last_sync_at) {
                 shouldSync = true;

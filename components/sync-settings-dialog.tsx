@@ -58,7 +58,7 @@ export function SyncSettingsDialog({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     username,
-                    sync_interval_minutes: parseInt(interval),
+                    // sync_interval_minutes is now ignored/enforced by backend
                 }),
             });
             const json = await res.json();
@@ -88,26 +88,13 @@ export function SyncSettingsDialog({
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="interval" className="text-right">
-                            Interval
+                        <Label className="text-right">
+                            Frequentie
                         </Label>
                         <div className="col-span-3">
-                            <Select value={interval} onValueChange={setInterval} disabled={isLoading}>
-                                <SelectTrigger id="interval">
-                                    <SelectValue placeholder="Kies interval" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="1">Elke minuut (Test)</SelectItem>
-                                    <SelectItem value="15">Elke 15 minuten</SelectItem>
-                                    <SelectItem value="30">Elke 30 minuten</SelectItem>
-                                    <SelectItem value="60">Elk uur</SelectItem>
-                                    <SelectItem value="120">Elke 2 uur</SelectItem>
-                                    <SelectItem value="240">Elke 4 uur</SelectItem>
-                                    <SelectItem value="360">Elke 6 uur</SelectItem>
-                                    <SelectItem value="720">Elke 12 uur</SelectItem>
-                                    <SelectItem value="1440">Elke dag (24u)</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <div className="flex h-10 w-full items-center rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground">
+                                Elke 6 uur (automatisch)
+                            </div>
                         </div>
                     </div>
                     {data?.settings?.last_synced_at && (
