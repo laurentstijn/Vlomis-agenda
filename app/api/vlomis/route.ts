@@ -432,11 +432,21 @@ async function handleRequest(request: Request) {
       // console.log(`[Sync] Skipped: ${skipReason}`);
     }
 
-    // 4. ALWAYS Fetch from DB (Single Source of Truth + Cache)
-    const firstDate = await getFirstDataDate(username, currentUser?.id);
-    const dbResult = await getPlanningEntries(username, undefined, undefined, currentUser?.id);
+    // 4. Determine Source of Truth
+    // If we just scraped (liveData), use that immediately to avoid DB race conditions.
+    // Otherwise, fetch from DB.
+    let rawData: PlanningEntry[] = [];
 
-    let rawData = dbResult.success ? dbResult.data : [];
+    if (isLive && liveData.length > 0) {
+      console.log(`[API] Using FRESH live/simulated data (${liveData.length} items)`);
+      rawData = liveData;
+    } else {
+      const dbResult = await getPlanningEntries(username, undefined, undefined, currentUser?.id);
+      rawData = dbResult.success ? dbResult.data : [];
+      console.log(`[API] Using CACHED DB data (${rawData.length} items)`);
+    }
+
+    const firstDate = await getFirstDataDate(username, currentUser?.id);
 
     // Deduplicate entries (just in case)
     const seen = new Set();
@@ -447,13 +457,7 @@ async function handleRequest(request: Request) {
       return true;
     });
 
-    console.log(`[API] Final DB Fetch: ${rawData.length} entries, Deduplicated to: ${finalData.length}`);
-
-    // Fallback: If DB fetch failed or empty but we JUST scraped data successfully, use the live data directly
-    if (finalData.length === 0 && isLive && liveData.length > 0) {
-      console.log(`[Sync] DB empty/failed, using live data as fallback.`);
-      finalData = liveData;
-    }
+    console.log(`[API] Final Dataset: ${rawData.length} entries, Deduplicated to: ${finalData.length}`);
 
     // --- Google Calendar Sync (Self-Healing & Proactive) ---
     let googleSyncResult = { success: false, message: "", error: "" };
