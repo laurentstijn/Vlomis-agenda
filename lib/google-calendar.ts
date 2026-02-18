@@ -246,8 +246,8 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
     const hasChanges = changes.added.length > 0 || changes.modified.length > 0 || changes.removed.length > 0;
 
     if (hasChanges) {
-      console.log('[Sync] Changes detected, creating report event...');
-      const title = `🔔 Update: +${changes.added.length} ~${changes.modified.length} -${changes.removed.length}`;
+      console.log(`[Sync] Changes detected (Add: ${changes.added.length}, Mod: ${changes.modified.length}, Del: ${changes.removed.length}). Creating report event...`);
+      const title = `🔔 RAPPORT: +${changes.added.length} ~${changes.modified.length} -${changes.removed.length}`;
 
       let desc = "Wijzigingen in je rooster:\n\n";
       if (changes.added.length) desc += "NIEUW:\n" + changes.added.join("\n") + "\n\n";
@@ -258,23 +258,30 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
       const startTime = new Date(nowTime.getTime() + 2 * 60000); // Now + 2 mins
       const endTime = new Date(startTime.getTime() + 15 * 60000); // +15 mins duration
 
-      await calendar.events.insert({
-        calendarId,
-        requestBody: {
-          summary: title,
-          description: desc,
-          start: { dateTime: startTime.toISOString() },
-          end: { dateTime: endTime.toISOString() },
-          reminders: {
-            useDefault: false,
-            overrides: [
-              { method: 'popup', minutes: 2 }, // 2 minutes before (which is roughly NOW)
-              { method: 'popup', minutes: 10 } // Backup 10 min before
-            ]
-          },
-          colorId: '11' // Red
-        }
-      });
+      try {
+        const reportRes = await calendar.events.insert({
+          calendarId,
+          requestBody: {
+            summary: title,
+            description: desc,
+            start: { dateTime: startTime.toISOString() },
+            end: { dateTime: endTime.toISOString() },
+            reminders: {
+              useDefault: false,
+              overrides: [
+                { method: 'popup', minutes: 2 },
+                { method: 'popup', minutes: 10 }
+              ]
+            },
+            colorId: '11' // Red
+          }
+        });
+        console.log(`[Sync] Report event created via API. ID: ${reportRes.data.id}`);
+      } catch (err) {
+        console.error('[Sync] FAILED to create report event:', err);
+      }
+    } else {
+      console.log('[Sync] No changes detected, skipping report event.');
     }
 
     console.log(`[Sync] Finished. Added: ${changes.added.length}, Mod: ${changes.modified.length}, Del: ${changes.removed.length}`);
