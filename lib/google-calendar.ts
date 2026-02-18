@@ -255,18 +255,22 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
       if (changes.removed.length) desc += "VERWIJDERD:\n" + changes.removed.join("\n");
 
       const nowTime = new Date();
-      const endTime = new Date(nowTime.getTime() + 10 * 60000);
+      const startTime = new Date(nowTime.getTime() + 2 * 60000); // Now + 2 mins
+      const endTime = new Date(startTime.getTime() + 15 * 60000); // +15 mins duration
 
       await calendar.events.insert({
         calendarId,
         requestBody: {
           summary: title,
           description: desc,
-          start: { dateTime: nowTime.toISOString() },
+          start: { dateTime: startTime.toISOString() },
           end: { dateTime: endTime.toISOString() },
           reminders: {
             useDefault: false,
-            overrides: [{ method: 'popup', minutes: 0 }]
+            overrides: [
+              { method: 'popup', minutes: 2 }, // 2 minutes before (which is roughly NOW)
+              { method: 'popup', minutes: 10 } // Backup 10 min before
+            ]
           },
           colorId: '11' // Red
         }
