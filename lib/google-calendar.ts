@@ -144,6 +144,25 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
 
     // Map of ID -> Event
     const existingMap = new Map<string, any>();
+
+    // cleanup old reports immediately
+    const oldReports = existingEvents.filter(ev =>
+      ev.summary && (ev.summary.includes('RAPPORT') || ev.summary.includes('🔔'))
+    );
+
+    if (oldReports.length > 0) {
+      console.log(`[Sync] Found ${oldReports.length} old report(s). Cleaning up...`);
+      for (const report of oldReports) {
+        if (report.id) {
+          try {
+            await calendar.events.delete({ calendarId, eventId: report.id });
+          } catch (e) {
+            console.error(`[Sync] Failed to delete old report ${report.id}`);
+          }
+        }
+      }
+    }
+
     existingEvents.forEach(ev => {
       if (ev.id && hexRegex.test(ev.id)) {
         existingMap.set(ev.id, ev);
