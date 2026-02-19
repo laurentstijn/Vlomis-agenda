@@ -1,9 +1,9 @@
-import { supabase } from './lib/supabase'
+import { supabaseAdmin } from './lib/supabase-admin'
 
 async function checkSyncStatus() {
     console.log('Checking sync status...')
 
-    const { data: users, error } = await supabase
+    const { data: users, error } = await supabaseAdmin
         .from('users')
         .select('id, vlomis_username, google_access_token, google_calendar_id, last_sync_at')
 

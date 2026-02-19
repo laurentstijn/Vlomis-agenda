@@ -1,0 +1,135 @@
+import { supabase, PlanningEntry } from './supabase'
+
+/**
+ * Save scraped planning entries to Supabase
+ * Uses upsert to update existing entries or insert new ones
+ */
+export async function savePlanningEntries(entries: any[], userId?: string): Promise<{ success: boolean; error?: string }> {
+    try {
+        // Helper to convert DD/MM/YYYY HH:MM to YYYY-MM-DD (Robust)
+        const convertToISODate = (dateStr: string): string => {
+            if (!dateStr) return new Date().toISOString().split('T')[0];
+            if (dateStr.includes('-')) return dateStr.split('T')[0].trim();
+            
+            // Take only the date part if there is a time
+            const [datePart] = dateStr.trim().split(/\s+/);
+            const bits = datePart.split('/');
+            if (bits.length !== 3) return dateStr; // Fallback
+            
+            const [day, month, year] = bits;
+            return `${year.trim()}-${month.trim().padStart(2, '0')}-${day.trim().padStart(2, '0')}`;
+        };
+
+        // Helper to convert to UTC ISO timestamp with Brussels offset awareness
+        const convertToISOTimestamp = (dateStr: string): string => {
+            if (dateStr.includes('T') && (dateStr.includes('Z') || dateStr.includes('+'))) return dateStr;
+
+            try {
+                const [datePart, timePart = '00:00'] = dateStr.trim().split(/\s+/);
+                const [day, month, year] = datePart.split('/');
+                const [hours, minutes] = timePart.split(':');
+
+                const localISO = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}:00`;
+                const dummy = new Date(localISO + 'Z');
+                const brusselsDateStr = dummy.toLocaleString('en-US', { timeZone: 'Europe/Brussels', hour12: false });
+                const [_, brusselsTime] = brusselsDateStr.split(', ');
+                const [bH] = brusselsTime.split(':');
+                const offset = parseInt(bH) - parseInt(hours);
+
+                return new Date(dummy.getTime() - (offset * 60 * 60 * 1000)).toISOString();
+            } catch (e) {
+                return dateStr;
+            }
+        };
+
+        // Transform entries to match database schema
+        const dbEntries = entries.map(entry => {
+            const ISOdate = convertToISODate(entry.date);
+            const vanISO = convertToISOTimestamp(entry.van);
+            const totISO = convertToISOTimestamp(entry.tot);
+            
+            // Stable ID logic to match scraper
+            const timeStr = entry.van.includes(' ') ? entry.van.split(' ')[1] : 
+                           (entry.van.includes('T') ? entry.van.split('T')[1].substring(0, 5) : '00:00');
+
+            return {
+                vlomis_entry_id: entry.vlomis_entry_id || `${entry.medewerker}-${ISOdate}-${entry.registratiesoort}-${timeStr.padStart(5, '0')}`,
+                date: ISOdate,
+                van: vanISO,
+                tot: totISO,
+                registratiesoort: entry.registratiesoort,
+                medewerker: entry.medewerker,
+                functie: entry.functie,
+                afdeling: entry.afdeling,
+                vaartuig: entry.vaartuig,
+                user_id: userId,
+                last_scraped_at: new Date().toISOString(),
+            };
+        });
+
+        // Cleanup Step: Remove "base" entries if an "(Aangevraagd)" version now exists.
+        const pendingEntries = entries.filter(e => e.registratiesoort && e.registratiesoort.includes('(Aangevraagd)'));
+
+        if (pendingEntries.length > 0) {
+            const deletePromises = pendingEntries.map(async (entry) => {
+                const baseType = entry.registratiesoort.replace(' (Aangevraagd)', '');
+                const vanISO = convertToISOTimestamp(entry.van);
+
+                await supabase
+                    .from('planning_entries')
+                    .delete()
+                    .match({
+                        medewerker: entry.medewerker,
+                        van: vanISO,
+                        registratiesoort: baseType
+                    });
+            });
+
+            await Promise.all(deletePromises);
+        }
+
+        // Upsert entries
+        const { error } = await supabase
+            .from('planning_entries')
+            .upsert(dbEntries, {
+                onConflict: 'medewerker,van,tot,registratiesoort',
+                ignoreDuplicates: false,
+            });
+
+        if (error) {
+            console.error('[Sync] DB error:', error);
+            return { success: false, error: error.message };
+        }
+
+        return { success: true };
+    } catch (err) {
+        console.error('[Sync] Save error:', err);
+        return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+}
+
+export async function clearOldEntries(medewerker: string) {
+    // Clear only this medewerker to avoid affecting others
+    await supabase
+        .from('planning_entries')
+        .delete()
+        .ilike('medewerker', medewerker);
+}
+
+export async function getPlanningEntries(medewerker?: string): Promise<PlanningEntry[]> {
+    let query = supabase
+        .from('planning_entries')
+        .select('*')
+        .order('van', { ascending: true });
+
+    if (medewerker) {
+        query = query.ilike('medewerker', medewerker);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+        console.error('Error fetching planning:', error);
+        return [];
+    }
+    return data || [];
+}

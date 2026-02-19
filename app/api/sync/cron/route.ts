@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { decrypt } from "@/lib/encryption";
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
         console.log("[BatchSync] Starting orchestrator...");
 
         // 1. Fetch all users
-        const { data: users, error } = await supabase
+        const { data: users, error } = await supabaseAdmin
             .from('users')
             .select('id, vlomis_username, vlomis_password, last_sync_at, sync_interval_minutes');
 

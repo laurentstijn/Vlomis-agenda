@@ -317,7 +317,7 @@ async function handleRequest(request: Request) {
 
     const { savePlanningEntries, getPlanningEntries, getFirstDataDate, cleanupOldEntries } = await import('@/lib/planning-db');
     const { getOrCreateUser } = await import('@/lib/user-db');
-    const { supabase } = await import('@/lib/supabase');
+    const { supabaseAdmin } = await import('@/lib/supabase-admin');
     const { decrypt } = await import('@/lib/encryption');
 
     console.log(`[API] ${request.method} /api/vlomis for user: ${usernameParam}`);
@@ -328,11 +328,22 @@ async function handleRequest(request: Request) {
     let password = passwordParam || '';
 
     if (usernameParam) {
-      // If we received a potential password, try to use it.
-      // NOTE: getOrCreateUser expects a RAW password to encrypt it if new.
-      // If we are coming from the CRON, we might be passing an already decrypted one, or raw.
-      const userResult = await getOrCreateUser(usernameParam, passwordParam || undefined);
-      if (userResult.success) currentUser = userResult.user;
+      // 1. Try to find EXISTING user
+      const { getUserByUsername } = await import('@/lib/user-db'); // Dynamic import to ensure we get the latest
+      const userResult = await getUserByUsername(usernameParam, supabaseAdmin);
+
+      if (userResult.success && userResult.user) {
+        currentUser = userResult.user;
+
+        // Update password if provided and different (only for existing users)
+        if (passwordParam) {
+          // We can do this async or let the background task handle it, 
+          // but strictly speaking we should probably only update password if login succeeds?
+          // For now, let's leave password update for the "Success" block to be safe against trash passwords on existing accounts too?
+          // Actually, the previous getOrCreateUser updated it immediately. 
+          // Let's defer password update to AFTER successful scrape to be clean.
+        }
+      }
     }
 
     // CRITICAL: Ensure 'username' variable reflects the identified user
@@ -357,7 +368,11 @@ async function handleRequest(request: Request) {
     const lastSync = currentUser?.last_sync_at ? new Date(currentUser.last_sync_at).getTime() : 0;
     const now = Date.now();
 
-    let shouldScrape = forceSync || (now - lastSync > SYNC_INTERVAL) || !currentUser;
+    // Force scrape if it's a POST request (Login or Manual Sync) because we need to VALIDATE credentials.
+    // If we rely on cache for a login attempt with wrong password, we might successfully "login" (from cache)
+    // even though the provided password is wrong.
+    const isLoginOrForce = request.method === 'POST';
+    let shouldScrape = isLoginOrForce || (now - lastSync > SYNC_INTERVAL) || !currentUser;
     let skipReason = "Data is fresh (within interval)";
 
     let liveData: PlanningEntry[] = [];
@@ -376,8 +391,33 @@ async function handleRequest(request: Request) {
       if (result.success) {
         liveData = result.data;
         isLive = true;
+
+        // --- SUCCESSFUL LOGIN/SCRAPE ---
+        // Now it is safe to Create or Update the user in the DB
+        if (!currentUser && username && password) {
+          console.log(`[Sync] Creating NEW user ${username} after successful verification.`);
+          const userResult = await getOrCreateUser(username, password, supabaseAdmin);
+          if (userResult.success) currentUser = userResult.user;
+        } else if (currentUser && password) {
+          // Update password for existing user if changed
+          // (We reuse getOrCreateUser logic which handles update, or do it manually)
+          // Using getOrCreateUser is easiest as it handles encryption check
+          await getOrCreateUser(username, password, supabaseAdmin);
+        }
       } else {
         console.error(`[Sync] Scrape failed: ${result.error}`);
+        // CRITICAL: If this is a POST (Login attempt or Force Sync) and it failed due to credentials,
+        // we MUST return an error to the client instead of falling back to cache.
+        const isLoginError = result.error?.toLowerCase().includes("login failed") || result.error?.toLowerCase().includes("missing");
+
+        // If it's a specific login error, OR if it's a new user who has no data yet (and scrape failed)
+        if (request.method === 'POST' && (isLoginError || !currentUser)) {
+          return NextResponse.json({
+            success: false,
+            error: result.error || "Login mislukt of Vlomis onbereikbaar",
+            debug: debugLogs
+          }, { status: 401 });
+        }
       }
 
       // --- BACKGROUND PERSISTENT TASKS ---
@@ -386,7 +426,7 @@ async function handleRequest(request: Request) {
 
         // Save to DB (only if scrape was successful and data exists)
         if (scrapeSuccess && liveData.length > 0) {
-          const saveRes = await savePlanningEntries(liveData, currentUser?.id);
+          const saveRes = await savePlanningEntries(liveData, currentUser?.id, supabaseAdmin);
           if (saveRes.success) {
             console.log(`[Background] Saved ${liveData.length} entries to DB.`);
           }
@@ -399,12 +439,12 @@ async function handleRequest(request: Request) {
           if (scrapeSuccess && result.realName && currentUser.display_name !== result.realName) {
             updateData.display_name = result.realName;
           }
-          await supabase.from('users').update(updateData).eq('id', currentUser.id);
+          await supabaseAdmin.from('users').update(updateData).eq('id', currentUser.id);
         }
 
         // Cleanup old entries (ONLY if scrape was successful to prevent data wipe on failed sync)
         if (scrapeSuccess) {
-          await cleanupOldEntries(username, currentUser?.id);
+          await cleanupOldEntries(username, currentUser?.id, supabaseAdmin);
         }
       })());
     } else {
@@ -420,12 +460,12 @@ async function handleRequest(request: Request) {
       console.log(`[API] Using FRESH live/simulated data (${liveData.length} items)`);
       rawData = liveData;
     } else {
-      const dbResult = await getPlanningEntries(username, undefined, undefined, currentUser?.id);
+      const dbResult = await getPlanningEntries(username, undefined, undefined, currentUser?.id, supabaseAdmin);
       rawData = dbResult.success ? dbResult.data : [];
       console.log(`[API] Using CACHED DB data (${rawData.length} items)`);
     }
 
-    const firstDate = await getFirstDataDate(username, currentUser?.id);
+    const firstDate = await getFirstDataDate(username, currentUser?.id, supabaseAdmin);
 
     // Deduplicate entries (just in case)
     const seen = new Set();

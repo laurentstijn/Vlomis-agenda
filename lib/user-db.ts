@@ -10,14 +10,31 @@ export interface User {
     created_at?: string
 }
 
+export async function getUserByUsername(username: string, client = supabase): Promise<{ success: boolean; user?: User; error?: string }> {
+    try {
+        const { data, error } = await client
+            .from('users')
+            .select('*')
+            .ilike('vlomis_username', username)
+            .single()
+
+        if (error && error.code !== 'PGRST116') {
+            return { success: false, error: error.message }
+        }
+        return { success: true, user: data || undefined }
+    } catch (error: any) {
+        return { success: false, error: error.message }
+    }
+}
+
 /**
  * Find or create a user by their Vlomis username
  * In this simple implementation, the Vlomis credentials act as the login
  */
-export async function getOrCreateUser(username: string, password?: string): Promise<{ success: boolean; user?: User; error?: string }> {
+export async function getOrCreateUser(username: string, password?: string, client = supabase): Promise<{ success: boolean; user?: User; error?: string }> {
     try {
         // 1. Try to find existing user (Case-insensitive)
-        const { data: existingUser, error: findError } = await supabase
+        const { data: existingUser, error: findError } = await client
             .from('users')
             .select('*')
             .ilike('vlomis_username', username)

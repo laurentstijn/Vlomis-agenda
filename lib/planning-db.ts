@@ -4,7 +4,7 @@ import { supabase, PlanningEntry } from './supabase'
  * Save scraped planning entries to Supabase
  * Uses upsert to update existing entries or insert new ones
  */
-export async function savePlanningEntries(entries: any[], userId?: string): Promise<{ success: boolean; data?: any[]; error?: string }> {
+export async function savePlanningEntries(entries: any[], userId?: string, client = supabase): Promise<{ success: boolean; data?: any[]; error?: string }> {
     try {
         if (!entries || !Array.isArray(entries)) {
             return { success: false, error: 'Invalid entries data' };
@@ -104,7 +104,7 @@ export async function savePlanningEntries(entries: any[], userId?: string): Prom
                 const baseType = entry.registratiesoort.replace(' (Aangevraagd)', '');
                 const vanISO = convertToISOTimestamp(entry.van);
 
-                return supabase
+                return client
                     .from('planning_entries')
                     .delete()
                     .match({
@@ -121,7 +121,7 @@ export async function savePlanningEntries(entries: any[], userId?: string): Prom
         }
 
         // Upsert entries
-        const { error, data } = await supabase
+        const { error, data } = await client
             .from('planning_entries')
             .upsert(dbEntries, {
                 onConflict: 'medewerker,van,tot,registratiesoort',
@@ -147,9 +147,9 @@ export async function clearOldEntries(medewerker: string, userId?: string) {
     await query;
 }
 
-export async function getPlanningEntries(medewerker?: string, from?: string, to?: string, userId?: string): Promise<{ success: boolean; data: PlanningEntry[]; error?: string }> {
+export async function getPlanningEntries(medewerker?: string, from?: string, to?: string, userId?: string, client = supabase): Promise<{ success: boolean; data: PlanningEntry[]; error?: string }> {
     try {
-        let query = supabase
+        let query = client
             .from('planning_entries')
             .select('*')
             .order('van', { ascending: true });
@@ -178,7 +178,7 @@ export async function getPlanningEntries(medewerker?: string, from?: string, to?
  * - Only targets entries from today onwards to preserve historical data
  * - ALSO implements a 1-year retention policy (deletes entries older than 365 days)
  */
-export async function cleanupOldEntries(medewerker: string, userId: string) {
+export async function cleanupOldEntries(medewerker: string, userId: string, client = supabase) {
     if (!userId) return;
 
     // 1. Retention Policy: Remove entries older than 365 days
@@ -186,7 +186,7 @@ export async function cleanupOldEntries(medewerker: string, userId: string) {
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
     const oneYearAgoStr = oneYearAgo.toISOString().split('T')[0];
 
-    await supabase
+    await client
         .from('planning_entries')
         .delete()
         .eq('user_id', userId)
@@ -208,8 +208,8 @@ export async function cleanupOldEntries(medewerker: string, userId: string) {
     if (error) console.error('[Cleanup] Error:', error);
 }
 
-export async function getFirstDataDate(medewerker: string, userId?: string): Promise<string | null> {
-    let query = supabase
+export async function getFirstDataDate(medewerker: string, userId?: string, client = supabase): Promise<string | null> {
+    let query = client
         .from('planning_entries')
         .select('date')
         .ilike('medewerker', medewerker)
