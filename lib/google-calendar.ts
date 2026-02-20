@@ -275,8 +275,10 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
       if (changes.modified.length) desc += "GEWIJZIGD:\n" + changes.modified.join("\n") + "\n\n";
       if (changes.removed.length) desc += "VERWIJDERD:\n" + changes.removed.join("\n");
 
+      // Schedule the event 1 hour in the future to ensure Google Calendar's notification engine
+      // has enough time to process and dispatch the push notifications.
       const nowTime = new Date();
-      const startTime = new Date(nowTime.getTime() + 2 * 60000); // Now + 2 mins
+      const startTime = new Date(nowTime.getTime() + 60 * 60000); // Now + 1 uur
       const endTime = new Date(startTime.getTime() + 15 * 60000); // +15 mins duration
 
       try {
@@ -290,8 +292,8 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
             reminders: {
               useDefault: false,
               overrides: [
-                { method: 'popup', minutes: 2 },
-                { method: 'popup', minutes: 10 }
+                { method: 'popup', minutes: 59 }, // Triggers in ~1 minute
+                { method: 'popup', minutes: 45 }  // Triggers in ~15 minutes
               ]
             },
             colorId: '11' // Red
