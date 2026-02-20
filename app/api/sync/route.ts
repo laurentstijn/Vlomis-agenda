@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { decrypt } from "@/lib/encryption";
 import { syncEventsToCalendar } from "@/lib/google-calendar";
 
@@ -17,7 +17,7 @@ export const GET = async (request: Request) => {
 
     try {
         // 1. Get all users that need sync
-        const { data: users, error: userError } = await supabase
+        const { data: users, error: userError } = await supabaseAdmin
             .from('users')
             .select('id, vlomis_username, vlomis_password, google_access_token');
 
@@ -67,7 +67,7 @@ export const GET = async (request: Request) => {
                 }
 
                 // Update last_sync_at
-                await supabase
+                await supabaseAdmin
                     .from('users')
                     .update({ last_sync_at: new Date().toISOString() })
                     .eq('vlomis_username', user.vlomis_username);

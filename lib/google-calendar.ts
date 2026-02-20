@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { supabase } from './supabase';
+import { supabaseAdmin } from './supabase-admin';
 import { AuthCredentials } from './auth-store';
 import crypto from 'crypto';
 
@@ -43,7 +43,7 @@ export async function saveGoogleTokens(userId: string, tokens: any) {
     updates.google_refresh_token = refresh_token;
   }
 
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from('users')
     .update(updates)
     .eq('id', userId);
@@ -53,7 +53,7 @@ export async function saveGoogleTokens(userId: string, tokens: any) {
 
 export async function getGoogleClientForUser(userId: string) {
   // Get tokens from DB
-  const { data: user, error } = await supabase
+  const { data: user, error } = await supabaseAdmin
     .from('users')
     .select('google_access_token, google_refresh_token, google_token_expiry, google_calendar_id')
     .eq('id', userId)
@@ -90,7 +90,7 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
 
     // 1. Get or create dedicated calendar
     let calendarId = 'primary';
-    const { data: userData } = await supabase
+    const { data: userData } = await supabaseAdmin
       .from('users')
       .select('google_calendar_id')
       .eq('id', userId)
@@ -124,7 +124,7 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
           if (newCalendar.data.id) calendarId = newCalendar.data.id;
         }
         if (calendarId && calendarId !== 'primary') {
-          await supabase.from('users').update({ google_calendar_id: calendarId }).eq('id', userId);
+          await supabaseAdmin.from('users').update({ google_calendar_id: calendarId }).eq('id', userId);
         }
       } catch (e) {
         console.error('Error finding/creating calendar', e);

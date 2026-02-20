@@ -50,7 +50,7 @@ export async function getOrCreateUser(username: string, password?: string, clien
             if (password) {
                 const encryptedPassword = encrypt(password);
                 if (existingUser.vlomis_password !== encryptedPassword) {
-                    await supabase
+                    await client
                         .from('users')
                         .update({ vlomis_password: encryptedPassword })
                         .eq('id', existingUser.id)
@@ -64,7 +64,7 @@ export async function getOrCreateUser(username: string, password?: string, clien
             return { success: false, error: 'Password required for first-time login' }
         }
 
-        const { data: newUser, error: createError } = await supabase
+        const { data: newUser, error: createError } = await client
             .from('users')
             .insert([{
                 vlomis_username: username,
@@ -89,9 +89,9 @@ export async function getOrCreateUser(username: string, password?: string, clien
 /**
  * Get user by ID
  */
-export async function getUserById(id: string): Promise<{ success: boolean; user?: User; error?: string }> {
+export async function getUserById(id: string, client = supabase): Promise<{ success: boolean; user?: User; error?: string }> {
     try {
-        const { data, error } = await supabase
+        const { data, error } = await client
             .from('users')
             .select('*')
             .eq('id', id)
@@ -109,10 +109,10 @@ export async function getUserById(id: string): Promise<{ success: boolean; user?
 /**
  * Hard reset a user: delete all planning entries and then delete the user itself
  */
-export async function hardResetUser(username: string): Promise<{ success: boolean; error?: string }> {
+export async function hardResetUser(username: string, client = supabase): Promise<{ success: boolean; error?: string }> {
     try {
         // 1. Find the user
-        const { data: user, error: findError } = await supabase
+        const { data: user, error: findError } = await client
             .from('users')
             .select('id')
             .eq('vlomis_username', username)
@@ -121,7 +121,7 @@ export async function hardResetUser(username: string): Promise<{ success: boolea
         if (findError) return { success: false, error: findError.message };
 
         // 2. Delete all planning entries
-        const { error: deleteEntriesError } = await supabase
+        const { error: deleteEntriesError } = await client
             .from('planning_entries')
             .delete()
             .eq('user_id', user.id);
@@ -129,7 +129,7 @@ export async function hardResetUser(username: string): Promise<{ success: boolea
         if (deleteEntriesError) return { success: false, error: deleteEntriesError.message };
 
         // 3. Delete the user record completely
-        const { error: deleteUserError } = await supabase
+        const { error: deleteUserError } = await client
             .from('users')
             .delete()
             .eq('id', user.id);

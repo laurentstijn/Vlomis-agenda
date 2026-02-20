@@ -141,8 +141,8 @@ export async function savePlanningEntries(entries: any[], userId?: string, clien
     }
 }
 
-export async function clearOldEntries(medewerker: string, userId?: string) {
-    let query = supabase.from('planning_entries').delete().ilike('medewerker', medewerker);
+export async function clearOldEntries(medewerker: string, userId?: string, client = supabase) {
+    let query = client.from('planning_entries').delete().ilike('medewerker', medewerker);
     if (userId) query = query.eq('user_id', userId);
     await query;
 }
@@ -197,7 +197,7 @@ export async function cleanupOldEntries(medewerker: string, userId: string, clie
     const tenMinsAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     const today = new Date().toISOString().split('T')[0];
 
-    const { error } = await supabase
+    const { error } = await client
         .from('planning_entries')
         .delete()
         .eq('user_id', userId)

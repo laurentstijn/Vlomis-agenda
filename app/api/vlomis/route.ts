@@ -549,6 +549,7 @@ async function handleRequest(request: Request) {
       userDepartment,
       googleConnected: !!currentUser?.google_access_token,
       googleSync: googleSyncResult,
+      scrapeError,
       debug: debugLogs,
       fetchedAt: new Date().toISOString()
     });

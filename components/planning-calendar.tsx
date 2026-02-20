@@ -262,14 +262,6 @@ export function PlanningCalendar() {
     setIsSettingsOpen(false);
   };
 
-  const fetcher = ([url, username, password]: [string, string?, string?]) => {
-    return fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    }).then((res) => res.json());
-  };
-
   const { data, error, isLoading, mutate } = useSWR(
     creds ? ["/api/vlomis", creds.username, creds.password] : null,
     fetcher,

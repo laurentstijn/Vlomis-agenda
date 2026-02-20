@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
             );
         }
 
-        const { data: user, error } = await supabase
+        const { data: user, error } = await supabaseAdmin
             .from("users")
             .select("sync_interval_minutes, last_synced_at")
             .eq("vlomis_username", username)
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
             );
         }
 
-        const { error } = await supabase
+        const { error } = await supabaseAdmin
             .from("users")
             .update({ sync_interval_minutes: interval })
             .eq("vlomis_username", username);
