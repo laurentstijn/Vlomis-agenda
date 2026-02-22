@@ -136,7 +136,7 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
     const eventsRes = await calendar.events.list({
       calendarId,
       maxResults: 2500,
-      showDeleted: false,
+      showDeleted: true, // Crucial: see events in the trash
       singleEvents: true
     });
     const existingEvents = eventsRes.data.items || [];
@@ -177,11 +177,25 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
       totalProcessed: 0
     };
 
-    const currentEventIds = new Set<string>();
+    // 1. FILTER & SORT
+    // First remove items we definitely don't want in Google Calendar
+    let filteredEvents = events.filter(entry => {
+      const type = entry.registratiesoort || '';
+      return !type.includes('Rust') && !type.includes('Reserve');
+    });
 
-    // Sort events (logic preserved)
-    const now = new Date();
-    const sortedEvents = [...events].sort((a, b) => new Date(a.van).getTime() - new Date(b.van).getTime());
+    // Sort by date
+    filteredEvents.sort((a, b) => new Date(a.van).getTime() - new Date(b.van).getTime());
+
+    // 2. APPLY LIMIT (after filtering)
+    // If limit is provided, only take the first N relevant entries
+    const actualLimit = limit || 500;
+    if (filteredEvents.length > actualLimit) {
+      console.log(`[Sync] Limiting ${filteredEvents.length} relevant events to ${actualLimit}.`);
+      filteredEvents = filteredEvents.slice(0, actualLimit);
+    }
+
+    const currentEventIds = new Set<string>();
 
     // Environment-independent time
     const formatTimeBrussels = (isoString: string) => {
@@ -203,9 +217,8 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
       return `${String(localHours).padStart(2, '0')}:${String(localMins).padStart(2, '0')}`;
     };
 
-    for (const entry of sortedEvents) {
+    for (const entry of filteredEvents) {
       const type = entry.registratiesoort || '';
-      if (type.includes('Rust') || type.includes('Reserve')) continue;
 
       const syncId = entry.vlomis_entry_id || `${entry.medewerker}-${entry.van}-${entry.registratiesoort}`;
       const eventId = crypto.createHash('sha256').update(syncId).digest('hex');
@@ -240,26 +253,36 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
         await calendar.events.insert({ calendarId, requestBody: eventResource });
         changes.added.push(`${localDate}: ${summary}`);
       } else {
+        const isCancelled = existing.status === 'cancelled';
         const isDifferent =
+          isCancelled ||
           existing.summary !== summary ||
           existing.description !== description ||
           existing.start?.date !== start.date;
 
         if (isDifferent) {
-          await calendar.events.update({ calendarId, eventId, requestBody: eventResource });
-          changes.modified.push(`${localDate}: ${summary}`);
+          // If it was in the trash, restore it while updating
+          const body = isCancelled
+            ? { ...eventResource, status: 'confirmed' }
+            : eventResource;
+
+          await calendar.events.update({ calendarId, eventId, requestBody: body });
+          changes.modified.push(`${localDate}: ${summary}${isCancelled ? ' (Hersteld)' : ''}`);
         }
       }
       changes.totalProcessed++;
-      await new Promise(r => setTimeout(r, 50));
+      // Increased delay to 150ms for rate limiting
+      await new Promise(r => setTimeout(r, 150));
     }
 
     // 4. SMART CLEANUP (DELETE)
     for (const [id, ev] of existingMap) {
-      if (!currentEventIds.has(id)) {
+      // Don't "re-delete" already cancelled events
+      if (!currentEventIds.has(id) && ev.status !== 'cancelled') {
         await calendar.events.delete({ calendarId, eventId: id });
         changes.removed.push(`${ev.start?.date || '?'}: ${ev.summary}`);
-        await new Promise(r => setTimeout(r, 50));
+        // Increased delay to 150ms for rate limiting
+        await new Promise(r => setTimeout(r, 150));
       }
     }
 

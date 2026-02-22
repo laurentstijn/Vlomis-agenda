@@ -136,14 +136,17 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
       page.on('dialog', async dialog => await dialog.accept());
       await page.click('input[name*="btnSearch"]');
 
-      // OPTIMIZED: Wait for results table to populate instead of fixed 5s
+      // Wait for table to update. 
+      // Vlomis usually shows a few rows by default (header + current/next few days).
+      // When searching for 12 months, the number of rows should increase significantly.
       try {
         await page.waitForFunction(() => {
           const rows = document.querySelectorAll('tr');
-          return rows.length > 5; // Basic check for results
-        }, { timeout: 8000 });
+          return rows.length > 20; // Increased to 20 to ensure more than just the default view
+        }, { timeout: 15000 });
+        log("Successfully waited for >20 rows.");
       } catch (e) {
-        // Fallback for cases where waitForFunction might fail
+        log("Wait for >20 rows timed out. Continuing with available rows.");
         await new Promise(r => setTimeout(r, 2000));
       }
     }
@@ -490,8 +493,8 @@ async function handleRequest(request: Request) {
           const { syncEventsToCalendar } = await import('@/lib/google-calendar');
 
           // INCREASE LIMIT for new users or manual refreshes to ensure they see future items
-          // Base: 25. Forced or New: 100.
-          const dynamicLimit = (forceSync || !currentUser.google_calendar_id) ? 100 : syncLimit;
+          // Base: 25. Forced or New: 500.
+          const dynamicLimit = (forceSync || !currentUser.google_calendar_id) ? 500 : syncLimit;
 
           waitUntil((async () => {
             await syncEventsToCalendar(currentUser.id, finalData, dynamicLimit);
