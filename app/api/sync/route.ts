@@ -11,7 +11,7 @@ export const GET = async (request: Request) => {
     const secret = searchParams.get('secret');
 
     // Simple security check (use a secret defined in .env)
-    if (secret !== process.env.SYNC_SECRET && process.env.NODE_ENV === 'production') {
+    if (secret !== process.env.CRON_SECRET && process.env.NODE_ENV === 'production') {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

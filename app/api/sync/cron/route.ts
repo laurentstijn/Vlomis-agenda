@@ -14,9 +14,15 @@ export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
         const secret = searchParams.get('secret');
+        const authHeader = request.headers.get('authorization');
 
         // Security check (CRON_SECRET should be set in environment)
-        if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
+        const isAuthorized =
+            (process.env.CRON_SECRET && secret === process.env.CRON_SECRET) ||
+            (process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`);
+
+        if (process.env.CRON_SECRET && !isAuthorized) {
+            console.error('[BatchSync] Unauthorized ping attempt');
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
