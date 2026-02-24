@@ -334,6 +334,26 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
 
   } catch (error: any) {
     console.error('[Sync] Fatal Error:', error);
+
+    // If the Google grant is invalid/revoked, clear it from the DB to prevent crashes
+    if (error?.message === 'invalid_grant' || error?.response?.data?.error === 'invalid_grant' || error?.message?.includes('invalid_grant')) {
+      console.warn(`[Google] Invalid grant for user ${userId}. Revoking tokens in DB.`);
+      try {
+        await supabaseAdmin
+          .from('users')
+          .update({
+            google_access_token: null,
+            google_refresh_token: null,
+            google_token_expiry: null,
+            google_calendar_id: null
+          })
+          .eq('id', userId);
+        console.log(`[Google] Successfully revoked tokens for ${userId}`);
+      } catch (dbErr) {
+        console.error(`[Google] Failed to revoke tokens for ${userId}:`, dbErr);
+      }
+    }
+
     throw error;
   }
 }

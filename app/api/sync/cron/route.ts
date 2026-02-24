@@ -42,6 +42,7 @@ export async function GET(request: Request) {
 
         const results = [];
         const now = new Date();
+        const usersToSync = [];
 
         for (const user of users) {
             // 2. Determine if user needs sync
@@ -60,15 +61,29 @@ export async function GET(request: Request) {
             }
 
             if (shouldSync) {
-                console.log(`[BatchSync] User ${user.vlomis_username} is due for sync.`);
+                usersToSync.push(user);
+            } else {
+                results.push({ user: user.vlomis_username, status: "skipped", reason: "Interval not reached" });
+            }
+        }
 
+        console.log(`[BatchSync] ${usersToSync.length} users are due for sync.`);
+
+        // Process users in batches of 3 to avoid Vercel timeouts (300s limit)
+        // while also not hitting Browserless concurrent limits
+        const BATCH_SIZE = 3;
+        for (let i = 0; i < usersToSync.length; i += BATCH_SIZE) {
+            const batch = usersToSync.slice(i, i + BATCH_SIZE);
+            console.log(`[BatchSync] Processing batch ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} users)...`);
+
+            await Promise.all(batch.map(async (user) => {
                 try {
                     // Decrypt password
                     const password = user.vlomis_password ? decrypt(user.vlomis_password) : undefined;
 
                     if (!password) {
                         results.push({ user: user.vlomis_username, status: "skipped", reason: "No password" });
-                        continue;
+                        return; // return from map function
                     }
 
                     // Trigger the existing VLOMIS endpoint with force=true (POST)
@@ -93,17 +108,15 @@ export async function GET(request: Request) {
                         status: data.success ? "success" : "failed",
                         message: data.message || data.error
                     });
-
-                    // Add a small delay between users to avoid rate limiting
-                    // 2 seconds per user = 120 users in 4 minutes
-                    await new Promise(r => setTimeout(r, 2000));
-
                 } catch (err: any) {
                     console.error(`[BatchSync] Error syncing user ${user.vlomis_username}:`, err);
                     results.push({ user: user.vlomis_username, status: "error", error: err.message });
                 }
-            } else {
-                results.push({ user: user.vlomis_username, status: "skipped", reason: "Interval not reached" });
+            }));
+
+            // Add a small delay between batches
+            if (i + BATCH_SIZE < usersToSync.length) {
+                await new Promise(r => setTimeout(r, 2000));
             }
         }
 
