@@ -131,15 +131,29 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
       }
     }
 
-    // 2. FETCH ALL EXISTING EVENTS (Up to 2500)
+    // 2. FETCH ALL EXISTING EVENTS (With pagination for robustness)
     console.log(`[Sync] Fetching existing events from ${calendarId}...`);
-    const eventsRes = await calendar.events.list({
-      calendarId,
-      maxResults: 2500,
-      showDeleted: true, // Crucial: see events in the trash
-      singleEvents: true
-    });
-    const existingEvents = eventsRes.data.items || [];
+    const existingEvents: any[] = [];
+    let pageToken: string | undefined = undefined;
+
+    try {
+      do {
+        const res = await calendar.events.list({
+          calendarId,
+          maxResults: 2500,
+          showDeleted: true, // Crucial: see events in the trash
+          singleEvents: true,
+          pageToken: pageToken
+        });
+        if (res.data.items) existingEvents.push(...res.data.items);
+        pageToken = (res.data as any).nextPageToken;
+      } while (pageToken);
+    } catch (listErr) {
+      console.error("[Sync] Failed to list events:", listErr);
+      // If listing fails but we have data, we might want to proceed or stop. 
+      // For now, let's stop to avoid duplicates.
+      throw listErr;
+    }
     const hexRegex = /^[0-9a-f]{64}$/;
 
     // Map of ID -> Event
@@ -250,8 +264,19 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
       const existing = existingMap.get(eventId);
 
       if (!existing) {
-        await calendar.events.insert({ calendarId, requestBody: eventResource });
-        changes.added.push(`${localDate}: ${summary}`);
+        try {
+          await calendar.events.insert({ calendarId, requestBody: eventResource });
+          changes.added.push(`${localDate}: ${summary}`);
+        } catch (err: any) {
+          // Handle "Identifier already exists" (409 Conflict)
+          if (err.code === 409) {
+            console.warn(`[Sync] 409 Conflict for ${eventId}. Trying update instead.`);
+            await calendar.events.update({ calendarId, eventId, requestBody: eventResource });
+            changes.modified.push(`${localDate}: ${summary} (Auto-fix 409)`);
+          } else {
+            throw err;
+          }
+        }
       } else {
         const isCancelled = existing.status === 'cancelled';
         const isDifferent =
