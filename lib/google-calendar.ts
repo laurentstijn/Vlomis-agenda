@@ -271,8 +271,8 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
         }
       }
       changes.totalProcessed++;
-      // Increased delay to 150ms for rate limiting
-      await new Promise(r => setTimeout(r, 150));
+      // Decreased delay to 50ms for performance and avoiding Vercel timeouts
+      await new Promise(r => setTimeout(r, 50));
     }
 
     // 4. SMART CLEANUP (DELETE)
@@ -281,8 +281,8 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
       if (!currentEventIds.has(id) && ev.status !== 'cancelled') {
         await calendar.events.delete({ calendarId, eventId: id });
         changes.removed.push(`${ev.start?.date || '?'}: ${ev.summary}`);
-        // Increased delay to 150ms for rate limiting
-        await new Promise(r => setTimeout(r, 150));
+        // Decreased delay to 50ms for performance and avoiding Vercel timeouts
+        await new Promise(r => setTimeout(r, 50));
       }
     }
 

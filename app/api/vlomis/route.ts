@@ -125,12 +125,18 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
     if (vanInput && totInput && searchBtn) {
       await page.evaluate((val) => {
         const el = document.querySelector('input[name*="van$txtDate"]') as HTMLInputElement;
-        if (el) el.value = val;
+        if (el) {
+          el.value = val;
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        }
       }, formatDate(fromDate));
 
       await page.evaluate((val) => {
         const el = document.querySelector('input[name*="tot$txtDate"]') as HTMLInputElement;
-        if (el) el.value = val;
+        if (el) {
+          el.value = val;
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        }
       }, formatDate(toDate));
 
       page.on('dialog', async dialog => await dialog.accept());
