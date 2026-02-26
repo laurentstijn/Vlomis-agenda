@@ -44,6 +44,17 @@ export async function GET(request: Request) {
         const now = new Date();
         const usersToSync = [];
 
+        // Determine if it is 7:00 AM in Brussels/Belgium
+        const brusselsTime = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Europe/Brussels',
+            hour: 'numeric',
+            minute: 'numeric',
+            hour12: false
+        }).format(now);
+
+        const is7AM = brusselsTime.startsWith('07:');
+        console.log(`[BatchSync] Current Brussels time: ${brusselsTime}. Is 7 AM window: ${is7AM}`);
+
         for (const user of users) {
             // 2. Determine if user needs sync
             let shouldSync = false;
@@ -98,6 +109,7 @@ export async function GET(request: Request) {
                             username: user.vlomis_username,
                             password: password,
                             force: true,
+                            forceReport: is7AM,
                             limit: 500
                         })
                     });

@@ -81,7 +81,7 @@ export async function getGoogleClientForUser(userId: string) {
   return userClient;
 }
 
-export async function syncEventsToCalendar(userId: string, events: any[], limit: number = 40) {
+export async function syncEventsToCalendar(userId: string, events: any[], limit: number = 40, forceReport: boolean = false) {
   try {
     console.log(`[syncEventsToCalendar] Starting smart sync for user ${userId} with ${events.length} potential events`);
 
@@ -314,14 +314,36 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
     // 5. NOTIFICATION REPORT
     const hasChanges = changes.added.length > 0 || changes.modified.length > 0 || changes.removed.length > 0;
 
-    if (hasChanges) {
-      console.log(`[Sync] Changes detected (Add: ${changes.added.length}, Mod: ${changes.modified.length}, Del: ${changes.removed.length}). Creating report event...`);
-      const title = `🔔 RAPPORT: +${changes.added.length} ~${changes.modified.length} -${changes.removed.length}`;
+    if (hasChanges || forceReport) {
+      console.log(`[Sync] ${hasChanges ? 'Changes detected' : 'Forced report requested'}. Creating report event...`);
+      
+      let title = "";
+      let desc = "";
 
-      let desc = "Wijzigingen in je rooster:\n\n";
-      if (changes.added.length) desc += "NIEUW:\n" + changes.added.join("\n") + "\n\n";
-      if (changes.modified.length) desc += "GEWIJZIGD:\n" + changes.modified.join("\n") + "\n\n";
-      if (changes.removed.length) desc += "VERWIJDERD:\n" + changes.removed.join("\n");
+      if (hasChanges) {
+        title = `🔔 RAPPORT: +${changes.added.length} ~${changes.modified.length} -${changes.removed.length}`;
+        desc = "Wijzigingen in je rooster:\n\n";
+        if (changes.added.length) desc += "NIEUW:\n" + changes.added.join("\n") + "\n\n";
+        if (changes.modified.length) desc += "GEWIJZIGD:\n" + changes.modified.join("\n") + "\n\n";
+        if (changes.removed.length) desc += "VERWIJDERD:\n" + changes.removed.join("\n");
+      } else {
+        title = `📅 STATUS: Geen wijzigingen`;
+        desc = "Er zijn momenteel geen nieuwe wijzigingen in je Vlomis planning.\n\nOverzicht van je eerstvolgende opdrachten:\n";
+        
+        // Add a small summary of next 3 upcoming events for context
+        const upcoming = filteredEvents
+          .filter(e => new Date(e.van).getTime() > Date.now())
+          .slice(0, 3);
+        
+        if (upcoming.length > 0) {
+          upcoming.forEach(e => {
+            const timeRange = e.van.includes('T') ? ` (${formatTimeBrussels(e.van)} - ${formatTimeBrussels(e.tot)})` : '';
+            desc += `- ${e.date}: ${e.vaartuig || e.functie || e.registratiesoort}${timeRange}\n`;
+          });
+        } else {
+          desc += "- Geen geplande opdrachten gevonden in de nabije toekomst.";
+        }
+      }
 
       // Schedule the event 1 hour in the future to ensure Google Calendar's notification engine
       // has enough time to process and dispatch the push notifications.

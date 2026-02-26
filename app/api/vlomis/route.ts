@@ -306,6 +306,7 @@ async function handleRequest(request: Request) {
     let usernameParam: string | null = null;
     let passwordParam: string | null = null;
     let forceSync = false;
+    let forceReport = false;
     let syncLimit = 500;
 
     // Handle both GET (URL) and POST (JSON)
@@ -314,12 +315,14 @@ async function handleRequest(request: Request) {
       usernameParam = body.username;
       passwordParam = body.password;
       forceSync = body.force === true;
+      forceReport = body.forceReport === true;
       if (body.limit) syncLimit = parseInt(body.limit);
     } else {
       const { searchParams } = new URL(request.url);
       usernameParam = searchParams.get('username');
       passwordParam = searchParams.get('password');
       forceSync = searchParams.get('force') === 'true';
+      forceReport = searchParams.get('forceReport') === 'true';
       const limitParam = searchParams.get('limit');
       if (limitParam) syncLimit = parseInt(limitParam);
     }
@@ -503,7 +506,7 @@ async function handleRequest(request: Request) {
           const dynamicLimit = (forceSync || !currentUser.google_calendar_id) ? 500 : syncLimit;
 
           waitUntil((async () => {
-            await syncEventsToCalendar(currentUser.id, finalData, dynamicLimit);
+            await syncEventsToCalendar(currentUser.id, finalData, dynamicLimit, forceReport);
             console.log(`[Background] Google Sync finished for ${username}.`);
           })());
 
