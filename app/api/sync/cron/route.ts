@@ -66,7 +66,28 @@ export async function GET(request: Request) {
             } else {
                 const lastSync = new Date(user.last_sync_at);
                 const diffMinutes = (now.getTime() - lastSync.getTime()) / (1000 * 60);
+
+                const brusselsSameDayFormat = new Intl.DateTimeFormat('en-GB', {
+                    timeZone: 'Europe/Brussels',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                });
+                const isSameDay = brusselsSameDayFormat.format(lastSync) === brusselsSameDayFormat.format(now);
+
+                const brusselsHourFormat = new Intl.DateTimeFormat('en-GB', {
+                    timeZone: 'Europe/Brussels',
+                    hour: 'numeric',
+                    hour12: false
+                });
+                const lastSyncHour = brusselsHourFormat.format(lastSync);
+                const currentHour = brusselsHourFormat.format(now);
+                const alreadySyncedThisHourToday = isSameDay && lastSyncHour === currentHour;
+
                 if (diffMinutes >= interval) {
+                    shouldSync = true;
+                } else if (is7AM && !alreadySyncedThisHourToday) {
+                    // Force a sync exactly once during the 7 AM window today
                     shouldSync = true;
                 }
             }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +12,7 @@ export async function POST(request: Request) {
         }
 
         // Remove Google tokens from the user record
-        const { error } = await supabase
+        const { error } = await supabaseAdmin
             .from('users')
             .update({
                 google_access_token: null,
