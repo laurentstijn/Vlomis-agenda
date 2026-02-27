@@ -161,7 +161,7 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
 
     // cleanup old reports immediately
     const oldReports = existingEvents.filter(ev =>
-      ev.summary && (ev.summary.includes('RAPPORT') || ev.summary.includes('🔔'))
+      ev.summary && (ev.summary.includes('RAPPORT') || ev.summary.includes('🔔') || ev.summary.includes('STATUS') || ev.summary.includes('📅'))
     );
 
     if (oldReports.length > 0) {
@@ -316,7 +316,7 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
 
     if (hasChanges || forceReport) {
       console.log(`[Sync] ${hasChanges ? 'Changes detected' : 'Forced report requested'}. Creating report event...`);
-      
+
       let title = "";
       let desc = "";
 
@@ -329,12 +329,12 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
       } else {
         title = `📅 STATUS: Geen wijzigingen`;
         desc = "Er zijn momenteel geen nieuwe wijzigingen in je Vlomis planning.\n\nOverzicht van je eerstvolgende opdrachten:\n";
-        
+
         // Add a small summary of next 3 upcoming events for context
         const upcoming = filteredEvents
           .filter(e => new Date(e.van).getTime() > Date.now())
           .slice(0, 3);
-        
+
         if (upcoming.length > 0) {
           upcoming.forEach(e => {
             const timeRange = e.van.includes('T') ? ` (${formatTimeBrussels(e.van)} - ${formatTimeBrussels(e.tot)})` : '';

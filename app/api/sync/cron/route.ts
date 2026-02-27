@@ -44,16 +44,21 @@ export async function GET(request: Request) {
         const now = new Date();
         const usersToSync = [];
 
-        // Determine if it is 7:00 AM in Brussels/Belgium
-        const brusselsTime = new Intl.DateTimeFormat('en-GB', {
+        // Determine if it is 8:30 AM in Brussels/Belgium
+        const brusselsTimeFormat = new Intl.DateTimeFormat('en-GB', {
             timeZone: 'Europe/Brussels',
             hour: 'numeric',
             minute: 'numeric',
             hour12: false
-        }).format(now);
+        });
+        const brusselsTime = brusselsTimeFormat.format(now);
 
-        const is7AM = brusselsTime.startsWith('07:');
-        console.log(`[BatchSync] Current Brussels time: ${brusselsTime}. Is 7 AM window: ${is7AM}`);
+        const [brusselsHourStr, brusselsMinuteStr] = brusselsTime.split(':');
+        const brusselsHour = parseInt(brusselsHourStr, 10);
+        const brusselsMinute = parseInt(brusselsMinuteStr, 10);
+
+        const is830Window = brusselsHour === 8 && brusselsMinute >= 30;
+        console.log(`[BatchSync] Current Brussels time: ${brusselsTime}. Is 8:30 AM window: ${is830Window}`);
 
         for (const user of users) {
             // 2. Determine if user needs sync
@@ -75,19 +80,14 @@ export async function GET(request: Request) {
                 });
                 const isSameDay = brusselsSameDayFormat.format(lastSync) === brusselsSameDayFormat.format(now);
 
-                const brusselsHourFormat = new Intl.DateTimeFormat('en-GB', {
-                    timeZone: 'Europe/Brussels',
-                    hour: 'numeric',
-                    hour12: false
-                });
-                const lastSyncHour = brusselsHourFormat.format(lastSync);
-                const currentHour = brusselsHourFormat.format(now);
-                const alreadySyncedThisHourToday = isSameDay && lastSyncHour === currentHour;
+                const lastSyncTimeStr = brusselsTimeFormat.format(lastSync);
+                const [lastSyncHour, lastSyncMinute] = lastSyncTimeStr.split(':').map(Number);
+                const alreadySyncedAfter830Today = isSameDay && (lastSyncHour > 8 || (lastSyncHour === 8 && lastSyncMinute >= 30));
 
                 if (diffMinutes >= interval) {
                     shouldSync = true;
-                } else if (is7AM && !alreadySyncedThisHourToday) {
-                    // Force a sync exactly once during the 7 AM window today
+                } else if (is830Window && !alreadySyncedAfter830Today) {
+                    // Force a sync exactly once during the 8:30 AM window today
                     shouldSync = true;
                 }
             }
@@ -130,7 +130,7 @@ export async function GET(request: Request) {
                             username: user.vlomis_username,
                             password: password,
                             force: true,
-                            forceReport: is7AM,
+                            forceReport: is830Window && user.vlomis_username.toLowerCase() === 'laurenst',
                             limit: 500
                         })
                     });
