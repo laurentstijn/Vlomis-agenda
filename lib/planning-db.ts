@@ -203,6 +203,7 @@ export async function cleanupOldEntries(medewerker: string, userId: string, clie
         .eq('user_id', userId)
         .ilike('medewerker', medewerker)
         .gte('date', today) // ONLY target today or future entries
+        .neq('registratiesoort', 'REFERTE_STAND')
         .lt('last_scraped_at', tenMinsAgo);
 
     if (error) console.error('[Cleanup] Error:', error);

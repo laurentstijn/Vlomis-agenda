@@ -54,15 +54,11 @@ export const GET = async (request: Request) => {
                     googleSync: false
                 });
 
-                // Sync to Google Calendar if connected
-                if (user.google_access_token && syncData.data?.length > 0) {
-                    try {
-                        console.log(`Syncing to Google Calendar for ${user.vlomis_username}`);
-                        await syncEventsToCalendar(user.id, syncData.data);
-                        results[results.length - 1].googleSync = true;
-                    } catch (calErr: any) {
-                        console.error(`Google Calendar sync error for ${user.vlomis_username}:`, calErr);
-                        results[results.length - 1].googleSyncError = calErr.message;
+                // Google Calendar Sync is handled internally by api/vlomis if needed
+                if (syncData.googleSync) {
+                    results[results.length - 1].googleSync = syncData.googleSync.success;
+                    if (syncData.googleSync.error) {
+                        results[results.length - 1].googleSyncError = syncData.googleSync.error;
                     }
                 }
 

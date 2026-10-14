@@ -81,7 +81,7 @@ export async function getGoogleClientForUser(userId: string) {
   return userClient;
 }
 
-export async function syncEventsToCalendar(userId: string, events: any[], limit: number = 40, forceReport: boolean = false) {
+export async function syncEventsToCalendar(userId: string, events: any[], limit: number = 500, forceReport: boolean = false, includeHistory: boolean = false, referteData?: any) {
   try {
     console.log(`[syncEventsToCalendar] Starting smart sync for user ${userId} with ${events.length} potential events`);
 
@@ -170,6 +170,7 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
         if (report.id) {
           try {
             await calendar.events.delete({ calendarId, eventId: report.id });
+            await new Promise(r => setTimeout(r, 250));
           } catch (e) {
             console.error(`[Sync] Failed to delete old report ${report.id}`);
           }
@@ -193,9 +194,16 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
 
     // 1. FILTER & SORT
     // First remove items we definitely don't want in Google Calendar
+    // Also exclude events from before the current month - Vlomis only scrapes from
+    // the 1st of the current month, so we should not touch past events in the calendar.
+    // includeHistory=true bypasses this for manual restore operations.
+    const syncStartDate = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
     let filteredEvents = events.filter(entry => {
       const type = entry.registratiesoort || '';
-      return !type.includes('Rust') && !type.includes('Reserve');
+      if (type.includes('Rust') || type.includes('Reserve') || type === 'REFERTE_STAND') return false;
+      // Only sync events from the current month onwards to avoid false "Hersteld" notifications
+      if (!includeHistory && entry.date < syncStartDate) return false;
+      return true;
     });
 
     // Sort by date
@@ -296,23 +304,96 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
         }
       }
       changes.totalProcessed++;
-      // Decreased delay to 50ms for performance and avoiding Vercel timeouts
-      await new Promise(r => setTimeout(r, 50));
+      // Increased delay to 250ms for performance and avoiding rate limits
+      await new Promise(r => setTimeout(r, 250));
     }
 
     // 4. SMART CLEANUP (DELETE)
+    const todayObj = new Date();
+    // We only clean up events starting from the first day of the current month
+    // because Vlomis scraping only fetches from the 1st of the current month.
+    // Older events are preserved in the calendar to maintain history.
+    const currentMonthStart = new Date(todayObj.getFullYear(), todayObj.getMonth(), 1).toISOString();
+    const currentMonthStartLocal = currentMonthStart.split('T')[0];
+
     for (const [id, ev] of existingMap) {
       // Don't "re-delete" already cancelled events
       if (!currentEventIds.has(id) && ev.status !== 'cancelled') {
-        await calendar.events.delete({ calendarId, eventId: id });
-        changes.removed.push(`${ev.start?.date || '?'}: ${ev.summary}`);
-        // Decreased delay to 50ms for performance and avoiding Vercel timeouts
-        await new Promise(r => setTimeout(r, 50));
+        // Extract the event start date
+        const eventDateStr = ev.start?.date || ev.start?.dateTime;
+        const isFromCurrentMonthOnwards = eventDateStr && eventDateStr >= currentMonthStartLocal;
+
+        if (isFromCurrentMonthOnwards) {
+          await calendar.events.delete({ calendarId, eventId: id });
+          changes.removed.push(`${ev.start?.date || '?'}: ${ev.summary}`);
+          // Increased delay to 250ms for performance and avoiding rate limits
+          await new Promise(r => setTimeout(r, 250));
+        } else {
+          // It's a past event, do not delete it!
+          console.log(`[Sync] Skipping deletion of past event: ${ev.summary} (${eventDateStr})`);
+        }
       }
     }
 
     // 5. NOTIFICATION REPORT
     const hasChanges = changes.added.length > 0 || changes.modified.length > 0 || changes.removed.length > 0;
+
+    // --- Referte periode berekening ---
+    let referteLine = '';
+    if (referteData && referteData.gepresteerd) {
+      const remainingText = !referteData.isBehaald
+        ? `Nog te presteren: ${referteData.resterend} uur`
+        : `✅ Doel behaald! Overschot: +${referteData.overschot} uur`;
+
+      referteLine = `\n\n📊 REFERTE PERIODE (${referteData.label || 'Vlomis'}):\n` +
+        `   Gepresteerd: ${referteData.gepresteerd} / ${referteData.doel} uur\n` +
+        `   Voortgang:   ${referteData.pct}%\n` +
+        `   ${remainingText}\n` +
+        `   Saldo recup:  ${referteData.saldoRecup || '0:00'} uur`;
+    } else {
+      const REFERTE_PERIODES = [
+        { months: [11, 0, 1, 2], label: 'Dec–Mrt', targetMinutes: 656 * 60 + 51 },
+        { months: [3, 4, 5, 6],  label: 'Apr–Jul', targetMinutes: 662 * 60 + 17 },
+        { months: [7, 8, 9, 10], label: 'Aug–Nov', targetMinutes: 662 * 60 + 17 },
+      ];
+      const TELLENDE_TYPES = ['Dagdienst', 'Dagdienst kantooruren', 'Nachtdienst', 'Extra Opdracht', 'Vorming (dienstvrijstelling)', 'Geneeskundig onderzoek'];
+      const nowForPeriode = new Date();
+      const nowMonth = nowForPeriode.getMonth();
+      const nowYear = nowForPeriode.getFullYear();
+      const currentPeriode = REFERTE_PERIODES.find(p => p.months.includes(nowMonth)) || REFERTE_PERIODES[2];
+      const periodeMonths = currentPeriode.months.map(m => {
+        let year = nowYear;
+        if (m === 11 && (nowMonth === 0 || nowMonth === 1 || nowMonth === 2)) year = nowYear - 1;
+        return { month: m, year };
+      });
+
+      let totalWorkedMinutes = 0;
+      for (const entry of events) {
+        const type = entry.registratiesoort || '';
+        if (!TELLENDE_TYPES.some(t => type.startsWith(t) || type.includes(t))) continue;
+        const entryDate = new Date(entry.date);
+        const em = entryDate.getMonth();
+        const ey = entryDate.getFullYear();
+        if (!periodeMonths.some(pm => pm.month === em && pm.year === ey)) continue;
+        const vanDate = new Date(entry.van);
+        const totDate = new Date(entry.tot);
+        const durationMin = Math.round((totDate.getTime() - vanDate.getTime()) / 60000);
+        if (durationMin > 0) totalWorkedMinutes += durationMin;
+      }
+
+      const fmtMin = (min: number) => {
+        const h = Math.floor(Math.abs(min) / 60);
+        const m = Math.abs(min) % 60;
+        return `${min < 0 ? '-' : ''}${h}:${String(m).padStart(2, '0')}`;
+      };
+      const pct = Math.min(100, Math.round((totalWorkedMinutes / currentPeriode.targetMinutes) * 100));
+      const remaining = currentPeriode.targetMinutes - totalWorkedMinutes;
+      referteLine = `\n\n📊 REFERTE PERIODE (${currentPeriode.label}):\n` +
+        `   Gepresteerd: ${fmtMin(totalWorkedMinutes)} / ${fmtMin(currentPeriode.targetMinutes)} uur\n` +
+        `   Voortgang:   ${pct}%\n` +
+        `   ${remaining > 0 ? `Nog te presteren: ${fmtMin(remaining)} uur` : `✅ Doel behaald! Overschot: +${fmtMin(Math.abs(remaining))} uur`}`;
+    }
+    // --- Einde referte periode ---
 
     if (hasChanges || forceReport) {
       console.log(`[Sync] ${hasChanges ? 'Changes detected' : 'Forced report requested'}. Creating report event...`);
@@ -344,6 +425,9 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
           desc += "- Geen geplande opdrachten gevonden in de nabije toekomst.";
         }
       }
+
+      // Voeg referte periode toe aan elke melding
+      desc += referteLine;
 
       // Schedule the event 1 hour in the future to ensure Google Calendar's notification engine
       // has enough time to process and dispatch the push notifications.

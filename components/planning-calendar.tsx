@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Settings,
   Lock,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -156,6 +157,57 @@ function formatTime(date: Date): string {
   const hours = date.getHours().toString().padStart(2, "0");
   const minutes = date.getMinutes().toString().padStart(2, "0");
   return `${hours}:${minutes}`;
+}
+
+// Referte periodes: 3 periodes van 4 maanden
+// Periode 1: Dec-Jan-Feb-Mar (doeluren: 656:51)
+// Periode 2: Apr-Mei-Jun-Jul (doeluren: 662:17)
+// Periode 3: Aug-Sep-Okt-Nov (doeluren: 662:17)
+const REFERTE_PERIODES = [
+  { months: [11, 0, 1, 2], label: "Dec–Mrt", targetMinutes: 656 * 60 + 51 },
+  { months: [3, 4, 5, 6],  label: "Apr–Jul", targetMinutes: 662 * 60 + 17 },
+  { months: [7, 8, 9, 10], label: "Aug–Nov", targetMinutes: 662 * 60 + 17 },
+];
+
+// Shift types die meetellen als gepresteerde uren
+const TELLENDE_TYPES = [
+  "Dagdienst",
+  "Dagdienst kantooruren",
+  "Nachtdienst",
+  "Extra Opdracht",
+  "Vorming (dienstvrijstelling)",
+  "Geneeskundig onderzoek",
+];
+
+function typeIsTellend(registratiesoort: string): boolean {
+  return TELLENDE_TYPES.some(t => registratiesoort.startsWith(t) || registratiesoort.includes(t));
+}
+
+function getCurrentRefertePeriode(date: Date) {
+  const month = date.getMonth();
+  return REFERTE_PERIODES.find(p => p.months.includes(month)) || REFERTE_PERIODES[2];
+}
+
+// Returns the year range for a referte periode given a reference date
+function getRefertePeriodeYears(periode: typeof REFERTE_PERIODES[0], date: Date): { month: number; year: number }[] {
+  const refMonth = date.getMonth();
+  const refYear = date.getFullYear();
+  return periode.months.map(m => {
+    // December belongs to the previous year if the current period starts in Dec
+    // e.g. if today is Jan 2026, Dec 2025 is in the same periode
+    let year = refYear;
+    if (m === 11 && (refMonth === 0 || refMonth === 1 || refMonth === 2)) {
+      year = refYear - 1;
+    }
+    return { month: m, year };
+  });
+}
+
+function formatMinutesToHHMM(minutes: number): string {
+  const h = Math.floor(Math.abs(minutes) / 60);
+  const m = Math.abs(minutes) % 60;
+  const sign = minutes < 0 ? "-" : "";
+  return `${sign}${h}:${String(m).padStart(2, "0")}`;
 }
 
 function parseApiDate(dateStr: string): Date {
@@ -338,6 +390,44 @@ export function PlanningCalendar() {
     });
     return stats;
   }, [planningData, currentMonth, currentYear]);
+
+  // Referte periode berekening
+  const refertePeriodeStats = useMemo(() => {
+    const today = new Date();
+    const periode = getCurrentRefertePeriode(today);
+    const periodeMonths = getRefertePeriodeYears(periode, today);
+
+    let totalWorkedMinutes = 0;
+    let totalWorkedMinutesToDate = 0; // only up to today
+
+    planningData.forEach((item) => {
+      if (!typeIsTellend(item.registratiesoort)) return;
+      const itemMonth = item.van.getMonth();
+      const itemYear = item.van.getFullYear();
+      const isInPeriode = periodeMonths.some(pm => pm.month === itemMonth && pm.year === itemYear);
+      if (!isInPeriode) return;
+
+      const durationMs = item.tot.getTime() - item.van.getTime();
+      if (durationMs <= 0) return;
+      const durationMin = Math.round(durationMs / 60000);
+      totalWorkedMinutes += durationMin;
+      if (item.van <= today) {
+        totalWorkedMinutesToDate += durationMin;
+      }
+    });
+
+    const pct = Math.min(100, Math.round((totalWorkedMinutes / periode.targetMinutes) * 100));
+    const remaining = periode.targetMinutes - totalWorkedMinutes;
+
+    return {
+      periode,
+      periodeMonths,
+      totalWorkedMinutes,
+      pct,
+      remaining,
+      targetMinutes: periode.targetMinutes,
+    };
+  }, [planningData]);
 
   const prevMonth = () => setCurrentDate(new Date(currentYear, currentMonth - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(currentYear, currentMonth + 1, 1));
@@ -569,7 +659,7 @@ export function PlanningCalendar() {
           </Card>
 
           {/* Monthly summary */}
-          <Card className="border-none shadow-sm mb-8 overflow-hidden">
+          <Card className="border-none shadow-sm mb-6 overflow-hidden">
             <CardHeader className="p-4 pb-2">
               <CardTitle className="text-base md:text-lg">
                 Overzicht {MONTHS[currentMonth]}
@@ -589,6 +679,90 @@ export function PlanningCalendar() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Referte periode */}
+          {(data?.referte || refertePeriodeStats.totalWorkedMinutes > 0) && (
+            <Card className="border-none shadow-sm mb-8 overflow-hidden">
+              <CardHeader className="p-4 pb-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-primary" />
+                    <CardTitle className="text-base md:text-lg">
+                      Referte periode ({data?.referte?.label || refertePeriodeStats.periode.label})
+                    </CardTitle>
+                  </div>
+                  {data?.referte && (
+                    <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-[10px] text-emerald-700">
+                      Officiële Vlomis stand
+                    </Badge>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="p-4 pt-2">
+                <div className="space-y-3">
+                  {/* Progress bar */}
+                  <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
+                    <div
+                      className={`h-3 rounded-full transition-all duration-500 ${
+                        (data?.referte ? data.referte.pct : refertePeriodeStats.pct) >= 100
+                          ? "bg-emerald-500"
+                          : (data?.referte ? data.referte.pct : refertePeriodeStats.pct) >= 75
+                          ? "bg-blue-500"
+                          : (data?.referte ? data.referte.pct : refertePeriodeStats.pct) >= 50
+                          ? "bg-amber-500"
+                          : "bg-red-400"
+                      }`}
+                      style={{ width: `${Math.min(100, data?.referte ? data.referte.pct : refertePeriodeStats.pct)}%` }}
+                    />
+                  </div>
+
+                  {/* Stats */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 md:gap-3">
+                    <div className="rounded-lg bg-muted/50 p-2 md:p-3 text-center">
+                      <div className="text-base md:text-2xl font-bold text-foreground">
+                        {data?.referte ? data.referte.gepresteerd : formatMinutesToHHMM(refertePeriodeStats.totalWorkedMinutes)}
+                      </div>
+                      <div className="text-[10px] md:text-xs text-muted-foreground">Gepresteerd</div>
+                    </div>
+                    <div className="rounded-lg bg-primary/10 p-2 md:p-3 text-center border border-primary/20">
+                      <div className="text-base md:text-2xl font-bold text-primary">
+                        {data?.referte ? data.referte.pct : refertePeriodeStats.pct}%
+                      </div>
+                      <div className="text-[10px] md:text-xs text-muted-foreground">Voortgang</div>
+                    </div>
+                    <div className={`rounded-lg p-2 md:p-3 text-center ${
+                      (data?.referte ? data.referte.isBehaald : refertePeriodeStats.remaining <= 0)
+                        ? "bg-emerald-50 border border-emerald-200"
+                        : "bg-muted/50"
+                    }`}>
+                      <div className={`text-base md:text-2xl font-bold ${
+                        (data?.referte ? data.referte.isBehaald : refertePeriodeStats.remaining <= 0) ? "text-emerald-600" : "text-foreground"
+                      }`}>
+                        {data?.referte
+                          ? (data.referte.isBehaald ? `+${data.referte.overschot}` : data.referte.resterend)
+                          : (refertePeriodeStats.remaining <= 0
+                            ? `+${formatMinutesToHHMM(Math.abs(refertePeriodeStats.remaining))}`
+                            : formatMinutesToHHMM(refertePeriodeStats.remaining))}
+                      </div>
+                      <div className="text-[10px] md:text-xs text-muted-foreground">
+                        {(data?.referte ? data.referte.isBehaald : refertePeriodeStats.remaining <= 0) ? "Overschot" : "Resterend"}
+                      </div>
+                    </div>
+                    <div className="rounded-lg bg-amber-50 border border-amber-200 p-2 md:p-3 text-center">
+                      <div className="text-base md:text-2xl font-bold text-amber-800">
+                        {data?.referte?.saldoRecup || "0:00"}
+                      </div>
+                      <div className="text-[10px] md:text-xs text-amber-700">Saldo recup</div>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] md:text-xs text-muted-foreground text-right">
+                    Doel: {data?.referte?.doel || formatMinutesToHHMM(refertePeriodeStats.targetMinutes)} uur voor de periode {data?.referte?.label || refertePeriodeStats.periode.label}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {data?.fetchedAt && (
             <div className="mt-4 pb-8 text-center space-y-1">

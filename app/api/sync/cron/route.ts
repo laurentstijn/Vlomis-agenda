@@ -57,8 +57,13 @@ export async function GET(request: Request) {
         const brusselsHour = parseInt(brusselsHourStr, 10);
         const brusselsMinute = parseInt(brusselsMinuteStr, 10);
 
-        const is830Window = brusselsHour === 8 && brusselsMinute >= 30;
-        console.log(`[BatchSync] Current Brussels time: ${brusselsTime}. Is 8:30 AM window: ${is830Window}`);
+        // Consider window from 8:30 to 9:59 Brussels time to cover:
+        //   - Winter (CET = UTC+1): cron at 06:30 UTC = 07:30 CET → not used for 8:30 window
+        //   - Cron at 06:30 UTC = 08:30 CEST (summer) → hits 8:30 window
+        //   - Cron at 07:30 UTC = 08:30 CET (winter) → hits 8:30 window
+        //   - Cron at 07:30 UTC = 09:30 CEST (summer) → also hits our widened window
+        const is830Window = (brusselsHour === 8 && brusselsMinute >= 30) || (brusselsHour === 9);
+        console.log(`[BatchSync] Current Brussels time: ${brusselsTime}. Is 8:30-9:59 AM window: ${is830Window}`);
 
         for (const user of users) {
             // 2. Determine if user needs sync
@@ -130,7 +135,7 @@ export async function GET(request: Request) {
                             username: user.vlomis_username,
                             password: password,
                             force: true,
-                            forceReport: is830Window && user.vlomis_username.toLowerCase() === 'laurenst',
+                            forceReport: is830Window, // Force daily morning report for ALL users with Google
                             limit: 500
                         })
                     });

@@ -288,10 +288,116 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
 
     console.log(`[Scraper] Extracted raw name: '${rawRealName}', Formatted to: '${realName}'`);
 
-    const realFunctie = entries.length > 0 ? entries[0].functie : undefined;
+    // --- Scrape official Referteperiode page ---
+    let referteData: any = null;
+    try {
+      log('Fetching official Referteperiodes.aspx...');
+      await page.goto('https://mip.agentschapmdk.be/Vlomis/Referteperiodes.aspx', { waitUntil: 'networkidle2' });
 
+      const selectedOption = await page.evaluate(() => {
+        const sel = document.querySelector('select[name*="maand_ref"]') as HTMLSelectElement;
+        if (!sel) return null;
+        const options = Array.from(sel.options)
+          .filter(o => o.value && o.value !== 'no_value' && o.text.trim())
+          .map(o => ({ value: o.value, text: o.text.trim() }));
+
+        if (options.length === 0) return null;
+
+        sel.value = options[0].value;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        return options[0];
+      });
+
+      if (selectedOption) {
+        await new Promise(r => setTimeout(r, 1000));
+        const searchBtn = await page.$('input[name*="btnSearch"]');
+        if (searchBtn) await searchBtn.click();
+
+        try {
+          await page.waitForFunction(() => {
+            const text = document.body.innerText;
+            return !text.includes('Bezig met verwerken...') && (text.includes('Saldo recup') || text.includes('Prest') || text.includes('Omschrijving'));
+          }, { timeout: 15000 });
+        } catch (e) {
+          // ignore wait timeout
+        }
+
+        await new Promise(r => setTimeout(r, 1000));
+
+        const rawData = await page.evaluate(() => {
+          const allRows: string[][] = [];
+          const tables = Array.from(document.querySelectorAll('table'));
+          for (const table of tables) {
+            const trs = Array.from(table.querySelectorAll('tr'));
+            for (const tr of trs) {
+              const cells = Array.from(tr.querySelectorAll('td, th')).map(c => c.textContent?.trim().replace(/\s+/g, ' ') || '');
+              if (cells.length > 0) allRows.push(cells);
+            }
+          }
+          return { allRows };
+        });
+
+        let gepresteerd = '';
+        let saldoRecup = '';
+        let opgespaard = '';
+
+        for (const cells of rawData.allRows) {
+          const rowStr = cells.join(' ');
+          if (rowStr.includes('Saldo recup')) {
+            saldoRecup = cells[cells.length - 1] || '';
+          }
+          if (rowStr.includes('Totaal opgespaarde uren')) {
+            opgespaard = cells[cells.length - 1] || '';
+          }
+          if (cells.length >= 5 && cells[0] === '' && /^\d+:\d{2}$/.test(cells[cells.length - 2])) {
+            gepresteerd = cells[cells.length - 2];
+          }
+        }
+
+        const label = selectedOption.text;
+        let doel = '662:17';
+        if (label.includes('12/') || label.includes('03/')) {
+          doel = '656:51';
+        }
+
+        const toMin = (hhmm: string): number => {
+          if (!hhmm || !hhmm.includes(':')) return 0;
+          const [h, m] = hhmm.split(':').map(Number);
+          return (h || 0) * 60 + (m || 0);
+        };
+
+        const fromMin = (min: number): string => {
+          const h = Math.floor(Math.abs(min) / 60);
+          const m = Math.abs(min) % 60;
+          return `${min < 0 ? '-' : ''}${h}:${String(m).padStart(2, '0')}`;
+        };
+
+        const gepresteerdMin = toMin(gepresteerd);
+        const doelMin = toMin(doel);
+        const remainingMin = doelMin - gepresteerdMin;
+        const pct = doelMin > 0 ? Math.min(100, Math.round((gepresteerdMin / doelMin) * 100)) : 0;
+
+        referteData = {
+          label,
+          gepresteerd: gepresteerd || '0:00',
+          doel,
+          resterend: remainingMin > 0 ? fromMin(remainingMin) : '0:00',
+          isBehaald: remainingMin <= 0,
+          overschot: remainingMin < 0 ? fromMin(Math.abs(remainingMin)) : '0:00',
+          pct,
+          saldoRecup: saldoRecup || '0:00',
+          opgespaard: opgespaard || '0:00',
+          fetchedAt: new Date().toISOString()
+        };
+        log(`Scraped official referte: ${referteData.gepresteerd}/${referteData.doel} (${referteData.pct}%), Recup: ${referteData.saldoRecup}`);
+      }
+    } catch (refErr: any) {
+      console.error('[Scraper] Referte scraping failed (non-fatal):', refErr?.message || refErr);
+    }
+
+    const realFunctie = entries.length > 0 ? entries[0].functie : undefined;
     log(`Extracted ${entries.length} entries. Real name: ${realName || 'not found'}, Functie: ${realFunctie || 'not found'}`);
-    return { success: true, data: entries, realName: realName || undefined, realFunctie: realFunctie, debug: debugLogs };
+    return { success: true, data: entries, referte: referteData, realName: realName || undefined, realFunctie: realFunctie, debug: debugLogs };
 
   } catch (error: any) {
     return { success: false, data: [], error: error.message, debug: debugLogs };
@@ -392,6 +498,7 @@ async function handleRequest(request: Request) {
     let debugLogs: string[] = [];
     let scrapeSuccess = false;
     let scrapeError: string | undefined = undefined;
+    let scrapedReferte: any = null;
 
     // 3. Scrape if needed
     if (shouldScrape) {
@@ -402,6 +509,7 @@ async function handleRequest(request: Request) {
       scrapeError = result.error;
       if (result.success) {
         liveData = result.data;
+        scrapedReferte = result.referte || null;
         isLive = true;
 
         // --- SUCCESSFUL LOGIN/SCRAPE ---
@@ -444,6 +552,27 @@ async function handleRequest(request: Request) {
           }
         }
 
+        // Save official referte stand to DB if available
+        if (scrapeSuccess && result.referte) {
+          try {
+            await savePlanningEntries([{
+              vlomis_entry_id: `REFERTE-${currentUser?.id || username}`,
+              date: new Date().toISOString().split('T')[0],
+              van: new Date().toISOString(),
+              tot: new Date().toISOString(),
+              registratiesoort: 'REFERTE_STAND',
+              medewerker: username,
+              functie: JSON.stringify(result.referte),
+              afdeling: 'Vlomis Referte',
+              vaartuig: result.referte.label || '',
+              user_id: currentUser?.id
+            }], currentUser?.id, supabaseAdmin);
+            console.log(`[Background] Saved official referte data to DB.`);
+          } catch (refSaveErr) {
+            console.error('[Background] Failed to save referte data:', refSaveErr);
+          }
+        }
+
         // Update user metadata (last_sync_at should always be updated after an attempt)
         if (currentUser?.id) {
           const updateData: any = { last_sync_at: new Date().toISOString() };
@@ -477,16 +606,29 @@ async function handleRequest(request: Request) {
       console.log(`[API] Using CACHED DB data (${rawData.length} items)`);
     }
 
+    // Extract official referte stand (either freshly scraped or from cached DB entry)
+    let referteData = scrapedReferte || null;
+    if (!referteData) {
+      const cachedRef = rawData.find(e => e.registratiesoort === 'REFERTE_STAND');
+      if (cachedRef && cachedRef.functie) {
+        try {
+          referteData = JSON.parse(cachedRef.functie);
+        } catch (e) {}
+      }
+    }
+
     const firstDate = await getFirstDataDate(username, currentUser?.id, supabaseAdmin);
 
-    // Deduplicate entries (just in case)
+    // Deduplicate entries (and filter out internal REFERTE_STAND marker)
     const seen = new Set();
-    let finalData = rawData.filter(entry => {
-      const key = `${entry.van}-${entry.tot}-${entry.registratiesoort}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    let finalData = rawData
+      .filter(entry => entry.registratiesoort !== 'REFERTE_STAND')
+      .filter(entry => {
+        const key = `${entry.van}-${entry.tot}-${entry.registratiesoort}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
 
     console.log(`[API] Final Dataset: ${rawData.length} entries, Deduplicated to: ${finalData.length}`);
 
@@ -506,7 +648,7 @@ async function handleRequest(request: Request) {
           const dynamicLimit = (forceSync || !currentUser.google_calendar_id) ? 500 : syncLimit;
 
           waitUntil((async () => {
-            await syncEventsToCalendar(currentUser.id, finalData, dynamicLimit, forceReport);
+            await syncEventsToCalendar(currentUser.id, finalData, dynamicLimit, forceReport, false, referteData);
             console.log(`[Background] Google Sync finished for ${username}.`);
           })());
 
@@ -549,6 +691,7 @@ async function handleRequest(request: Request) {
     return NextResponse.json({
       success: true,
       data: finalData,
+      referte: referteData,
       isLive,
       skipped: !shouldScrape,
       message: shouldScrape
