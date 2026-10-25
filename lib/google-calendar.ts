@@ -360,20 +360,15 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
     // --- Referte periode berekening ---
     let referteLine = '';
     if (referteData && referteData.gepresteerd) {
-      const remainingText = !referteData.isBehaald
-        ? `Nog te presteren: ${referteData.resterend} uur`
-        : `✅ Doel behaald! Overschot: +${referteData.overschot} uur`;
-
       referteLine = `\n\n📊 REFERTE PERIODE (${referteData.label || 'Vlomis'}):\n` +
-        `   Gepresteerd: ${referteData.gepresteerd} / ${referteData.doel} uur\n` +
-        `   Voortgang:   ${referteData.pct}%\n` +
-        `   ${remainingText}\n` +
-        `   Saldo recup:  ${referteData.saldoRecup || '0:00'} uur`;
+        `   In rooster / Gepresteerd: ${referteData.gepresteerd} uur\n` +
+        (referteData.opgespaard && referteData.opgespaard !== '0:00' ? `   Opgespaard overwerk:      ${referteData.opgespaard} uur\n` : '') +
+        `   Saldo recup:             ${referteData.saldoRecup || '0:00'} uur`;
     } else {
       const REFERTE_PERIODES = [
-        { months: [11, 0, 1, 2], label: 'Dec–Mrt', targetMinutes: 656 * 60 + 51 },
-        { months: [3, 4, 5, 6],  label: 'Apr–Jul', targetMinutes: 662 * 60 + 17 },
-        { months: [7, 8, 9, 10], label: 'Aug–Nov', targetMinutes: 662 * 60 + 17 },
+        { months: [11, 0, 1, 2], label: 'Dec–Mrt' },
+        { months: [3, 4, 5, 6],  label: 'Apr–Jul' },
+        { months: [7, 8, 9, 10], label: 'Aug–Nov' },
       ];
       const TELLENDE_TYPES = ['Dagdienst', 'Dagdienst kantooruren', 'Nachtdienst', 'Extra Opdracht', 'Vorming (dienstvrijstelling)', 'Geneeskundig onderzoek'];
       const nowForPeriode = new Date();
@@ -405,12 +400,8 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
         const m = Math.abs(min) % 60;
         return `${min < 0 ? '-' : ''}${h}:${String(m).padStart(2, '0')}`;
       };
-      const pct = Math.min(100, Math.round((totalWorkedMinutes / currentPeriode.targetMinutes) * 100));
-      const remaining = currentPeriode.targetMinutes - totalWorkedMinutes;
       referteLine = `\n\n📊 REFERTE PERIODE (${currentPeriode.label}):\n` +
-        `   Gepresteerd: ${fmtMin(totalWorkedMinutes)} / ${fmtMin(currentPeriode.targetMinutes)} uur\n` +
-        `   Voortgang:   ${pct}%\n` +
-        `   ${remaining > 0 ? `Nog te presteren: ${fmtMin(remaining)} uur` : `✅ Doel behaald! Overschot: +${fmtMin(Math.abs(remaining))} uur`}`;
+        `   In rooster / Gepresteerd: ${fmtMin(totalWorkedMinutes)} uur`;
     }
     // --- Einde referte periode ---
 

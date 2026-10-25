@@ -700,65 +700,27 @@ export function PlanningCalendar() {
               </CardHeader>
               <CardContent className="p-4 pt-2">
                 <div className="space-y-3">
-                  {/* Progress bar */}
-                  <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
-                    <div
-                      className={`h-3 rounded-full transition-all duration-500 ${
-                        (data?.referte ? data.referte.pct : refertePeriodeStats.pct) >= 100
-                          ? "bg-emerald-500"
-                          : (data?.referte ? data.referte.pct : refertePeriodeStats.pct) >= 75
-                          ? "bg-blue-500"
-                          : (data?.referte ? data.referte.pct : refertePeriodeStats.pct) >= 50
-                          ? "bg-amber-500"
-                          : "bg-red-400"
-                      }`}
-                      style={{ width: `${Math.min(100, data?.referte ? data.referte.pct : refertePeriodeStats.pct)}%` }}
-                    />
-                  </div>
-
                   {/* Stats */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 md:gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 md:gap-3">
                     <div className="rounded-lg bg-muted/50 p-2 md:p-3 text-center">
                       <div className="text-base md:text-2xl font-bold text-foreground">
                         {data?.referte ? data.referte.gepresteerd : formatMinutesToHHMM(refertePeriodeStats.totalWorkedMinutes)}
                       </div>
-                      <div className="text-[10px] md:text-xs text-muted-foreground">Gepresteerd</div>
+                      <div className="text-[10px] md:text-xs text-muted-foreground">In rooster / Gepresteerd</div>
                     </div>
-                    <div className="rounded-lg bg-primary/10 p-2 md:p-3 text-center border border-primary/20">
-                      <div className="text-base md:text-2xl font-bold text-primary">
-                        {data?.referte ? data.referte.pct : refertePeriodeStats.pct}%
+                    <div className="rounded-lg bg-blue-50 border border-blue-200 p-2 md:p-3 text-center">
+                      <div className="text-base md:text-2xl font-bold text-blue-800">
+                        {data?.referte?.opgespaard || "0:00"}
                       </div>
-                      <div className="text-[10px] md:text-xs text-muted-foreground">Voortgang</div>
-                    </div>
-                    <div className={`rounded-lg p-2 md:p-3 text-center ${
-                      (data?.referte ? data.referte.isBehaald : refertePeriodeStats.remaining <= 0)
-                        ? "bg-emerald-50 border border-emerald-200"
-                        : "bg-muted/50"
-                    }`}>
-                      <div className={`text-base md:text-2xl font-bold ${
-                        (data?.referte ? data.referte.isBehaald : refertePeriodeStats.remaining <= 0) ? "text-emerald-600" : "text-foreground"
-                      }`}>
-                        {data?.referte
-                          ? (data.referte.isBehaald ? `+${data.referte.overschot}` : data.referte.resterend)
-                          : (refertePeriodeStats.remaining <= 0
-                            ? `+${formatMinutesToHHMM(Math.abs(refertePeriodeStats.remaining))}`
-                            : formatMinutesToHHMM(refertePeriodeStats.remaining))}
-                      </div>
-                      <div className="text-[10px] md:text-xs text-muted-foreground">
-                        {(data?.referte ? data.referte.isBehaald : refertePeriodeStats.remaining <= 0) ? "Overschot" : "Resterend"}
-                      </div>
+                      <div className="text-[10px] md:text-xs text-blue-700">Opgespaard overwerk</div>
                     </div>
                     <div className="rounded-lg bg-amber-50 border border-amber-200 p-2 md:p-3 text-center">
                       <div className="text-base md:text-2xl font-bold text-amber-800">
                         {data?.referte?.saldoRecup || "0:00"}
                       </div>
-                      <div className="text-[10px] md:text-xs text-amber-700">Saldo recup</div>
+                      <div className="text-[10px] md:text-xs text-amber-700">Saldo recup (einde periode)</div>
                     </div>
                   </div>
-
-                  <p className="text-[10px] md:text-xs text-muted-foreground text-right">
-                    Doel: {data?.referte?.doel || formatMinutesToHHMM(refertePeriodeStats.targetMinutes)} uur voor de periode {data?.referte?.label || refertePeriodeStats.periode.label}
-                  </p>
                 </div>
               </CardContent>
             </Card>
