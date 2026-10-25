@@ -235,6 +235,28 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
       return results;
     }, username) as PlanningEntry[];
 
+    // Filter out superseded shifts (e.g. if someone has full-day Recuperatie verlof, Verlof, or Ziekte on date X,
+    // the rostered Dagdienst/Nachtdienst on date X is superseded and should not be saved or shown)
+    const fullDayLeaveDates = new Set<string>();
+    for (const e of entries) {
+      const s = (e.registratiesoort || '').toLowerCase();
+      const isLeave = s.includes('verlof') || s.includes('ziekte') || s.includes('omstandigheid') || s.includes('vakantie') || s.includes('compensatie') || s.includes('recup');
+      if (isLeave) {
+        const dur = (new Date(e.tot).getTime() - new Date(e.van).getTime()) / (1000 * 60 * 60);
+        if (dur >= 11) fullDayLeaveDates.add(e.date);
+      }
+    }
+
+    const cleanEntries = entries.filter(e => {
+      const s = (e.registratiesoort || '').toLowerCase();
+      const isWorkShift = s.includes('dagdienst') || s.includes('nachtdienst');
+      if (isWorkShift && fullDayLeaveDates.has(e.date)) {
+        log(`Dropping superseded work shift ${e.registratiesoort} on ${e.date} (leave active)`);
+        return false;
+      }
+      return true;
+    });
+
     // Extract & Format Real Name
     const rawRealName = await page.evaluate(() => {
       const el = document.querySelector('input#ctl00_ContentPlaceHolder1_ctl01_select_per_id') as HTMLInputElement;
@@ -395,9 +417,9 @@ async function scrapeVlomis(credentials?: { username?: string; password?: string
       console.error('[Scraper] Referte scraping failed (non-fatal):', refErr?.message || refErr);
     }
 
-    const realFunctie = entries.length > 0 ? entries[0].functie : undefined;
-    log(`Extracted ${entries.length} entries. Real name: ${realName || 'not found'}, Functie: ${realFunctie || 'not found'}`);
-    return { success: true, data: entries, referte: referteData, realName: realName || undefined, realFunctie: realFunctie, debug: debugLogs };
+    const realFunctie = cleanEntries.length > 0 ? cleanEntries[0].functie : undefined;
+    log(`Extracted ${cleanEntries.length} entries (clean). Real name: ${realName || 'not found'}, Functie: ${realFunctie || 'not found'}`);
+    return { success: true, data: cleanEntries, referte: referteData, realName: realName || undefined, realFunctie: realFunctie, debug: debugLogs };
 
   } catch (error: any) {
     return { success: false, data: [], error: error.message, debug: debugLogs };
@@ -630,7 +652,26 @@ async function handleRequest(request: Request) {
         return true;
       });
 
-    console.log(`[API] Final Dataset: ${rawData.length} entries, Deduplicated to: ${finalData.length}`);
+    // Also filter out any cached superseded shifts
+    const cachedLeaveDates = new Set<string>();
+    for (const e of finalData) {
+      const s = (e.registratiesoort || '').toLowerCase();
+      const isLeave = s.includes('verlof') || s.includes('ziekte') || s.includes('omstandigheid') || s.includes('vakantie') || s.includes('compensatie') || s.includes('recup');
+      if (isLeave) {
+        const dur = (new Date(e.tot).getTime() - new Date(e.van).getTime()) / (1000 * 60 * 60);
+        if (dur >= 11) cachedLeaveDates.add(e.date);
+      }
+    }
+    finalData = finalData.filter(e => {
+      const s = (e.registratiesoort || '').toLowerCase();
+      const isWorkShift = s.includes('dagdienst') || s.includes('nachtdienst');
+      if (isWorkShift && cachedLeaveDates.has(e.date)) {
+        return false;
+      }
+      return true;
+    });
+
+    console.log(`[API] Final Dataset: ${rawData.length} entries, Deduplicated & cleaned to: ${finalData.length}`);
 
     // --- Google Calendar Sync (Self-Healing & Proactive) ---
     let googleSyncResult = { success: false, message: "", error: "" };

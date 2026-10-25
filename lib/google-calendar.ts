@@ -207,6 +207,27 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
       return true;
     });
 
+    // Filter out superseded work shifts on dates where full-day leave/illness exists
+    const fullDayLeaveDates = new Set<string>();
+    for (const e of filteredEvents) {
+      const s = (e.registratiesoort || '').toLowerCase();
+      const isLeave = s.includes('verlof') || s.includes('ziekte') || s.includes('omstandigheid') || s.includes('vakantie') || s.includes('compensatie') || s.includes('recup');
+      if (isLeave) {
+        const dur = (new Date(e.tot).getTime() - new Date(e.van).getTime()) / (1000 * 60 * 60);
+        if (dur >= 11) fullDayLeaveDates.add(e.date);
+      }
+    }
+
+    filteredEvents = filteredEvents.filter(e => {
+      const s = (e.registratiesoort || '').toLowerCase();
+      const isWorkShift = s.includes('dagdienst') || s.includes('nachtdienst');
+      if (isWorkShift && fullDayLeaveDates.has(e.date)) {
+        console.log(`[Sync] Dropping superseded work shift ${e.registratiesoort} on ${e.date} (leave active)`);
+        return false;
+      }
+      return true;
+    });
+
     // Sort by date
     filteredEvents.sort((a, b) => new Date(a.van).getTime() - new Date(b.van).getTime());
 
@@ -248,7 +269,17 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
       currentEventIds.add(eventId);
 
       const vesselOrFunction = entry.vaartuig || entry.functie || '';
-      const timeRange = entry.van.includes('T') ? ` (${formatTimeBrussels(entry.van)} - ${formatTimeBrussels(entry.tot)})` : '';
+      const s = type.toLowerCase();
+      const isLeave = s.includes('verlof') || s.includes('ziekte') || s.includes('omstandigheid') || s.includes('vakantie') || s.includes('compensatie') || s.includes('recup');
+      const startB = formatTimeBrussels(entry.van);
+      const endB = formatTimeBrussels(entry.tot);
+      const isAllDay = startB === '00:00' && endB === '00:00';
+      const durHours = (new Date(entry.tot).getTime() - new Date(entry.van).getTime()) / (1000 * 60 * 60);
+      const isFullDay = isLeave && (isAllDay || durHours >= 11);
+
+      const timeRange = (!isFullDay && entry.van.includes('T'))
+        ? ` (${startB} - ${endB})`
+        : '';
       const summary = vesselOrFunction
         ? `${vesselOrFunction} - ${type}${timeRange}`
         : `${type}${timeRange}`;
@@ -419,17 +450,34 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
         if (changes.removed.length) desc += "VERWIJDERD:\n" + changes.removed.join("\n");
       } else {
         title = `📅 STATUS: Geen wijzigingen`;
-        desc = "Er zijn momenteel geen nieuwe wijzigingen in je Vlomis planning.\n\nOverzicht van je eerstvolgende opdrachten:\n";
+        desc = "Er zijn momenteel geen nieuwe wijzigingen in je Vlomis planning.\n\nOverzicht van je eerstvolgende planning:\n";
 
-        // Add a small summary of next 3 upcoming events for context
+        // Add a small summary of next 3 upcoming events for context (today onwards)
+        const todayStr = todayObj.toISOString().split('T')[0];
         const upcoming = filteredEvents
-          .filter(e => new Date(e.van).getTime() > Date.now())
+          .filter(e => e.date >= todayStr)
           .slice(0, 3);
 
         if (upcoming.length > 0) {
           upcoming.forEach(e => {
-            const timeRange = e.van.includes('T') ? ` (${formatTimeBrussels(e.van)} - ${formatTimeBrussels(e.tot)})` : '';
-            desc += `- ${e.date}: ${e.vaartuig || e.functie || e.registratiesoort}${timeRange}\n`;
+            const eType = e.registratiesoort || '';
+            const s = eType.toLowerCase();
+            const eIsLeave = s.includes('verlof') || s.includes('ziekte') || s.includes('omstandigheid') || s.includes('vakantie') || s.includes('compensatie') || s.includes('recup');
+            const startB = formatTimeBrussels(e.van);
+            const endB = formatTimeBrussels(e.tot);
+            const isAllDay = startB === '00:00' && endB === '00:00';
+            const dur = (new Date(e.tot).getTime() - new Date(e.van).getTime()) / (1000 * 60 * 60);
+            const isFull = eIsLeave && (isAllDay || dur >= 11);
+
+            let label = '';
+            if (isFull) {
+              label = `${eType} (Vrij)`;
+            } else {
+              const tr = e.van.includes('T') ? ` (${startB} - ${endB})` : '';
+              const vessel = e.vaartuig ? ` [${e.vaartuig}]` : '';
+              label = `${eType}${tr}${vessel}`;
+            }
+            desc += `- ${e.date}: ${label}\n`;
           });
         } else {
           desc += "- Geen geplande opdrachten gevonden in de nabije toekomst.";
