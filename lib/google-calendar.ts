@@ -197,7 +197,8 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
     // Also exclude events from before the current month - Vlomis only scrapes from
     // the 1st of the current month, so we should not touch past events in the calendar.
     // includeHistory=true bypasses this for manual restore operations.
-    const syncStartDate = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+    const todayObj = new Date();
+    const syncStartDate = new Date(todayObj.getFullYear(), todayObj.getMonth(), 1).toISOString().split('T')[0];
     let filteredEvents = events.filter(entry => {
       const type = entry.registratiesoort || '';
       if (type.includes('Rust') || type.includes('Reserve') || type === 'REFERTE_STAND') return false;
@@ -269,18 +270,30 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
         transparency: 'transparent'
       };
 
+      // Events ~11+ months (330+ days) in the future belong to the sliding 1-year horizon
+      // rolling forward daily. They are synced to the calendar, but omitted from notification reports.
+      const eventDateObj = new Date(localDate);
+      const diffDays = Math.round((eventDateObj.getTime() - todayObj.getTime()) / (1000 * 60 * 60 * 24));
+      const isRollingHorizon = diffDays >= 330;
+
       const existing = existingMap.get(eventId);
 
       if (!existing) {
         try {
           await calendar.events.insert({ calendarId, requestBody: eventResource });
-          changes.added.push(`${localDate}: ${summary}`);
+          if (!isRollingHorizon) {
+            changes.added.push(`${localDate}: ${summary}`);
+          } else {
+            console.log(`[Sync] Omitting rolling 1-year horizon event from report: ${localDate}: ${summary}`);
+          }
         } catch (err: any) {
           // Handle "Identifier already exists" (409 Conflict)
           if (err.code === 409) {
             console.warn(`[Sync] 409 Conflict for ${eventId}. Trying update instead.`);
             await calendar.events.update({ calendarId, eventId, requestBody: eventResource });
-            changes.modified.push(`${localDate}: ${summary} (Auto-fix 409)`);
+            if (!isRollingHorizon) {
+              changes.modified.push(`${localDate}: ${summary} (Auto-fix 409)`);
+            }
           } else {
             throw err;
           }
@@ -300,7 +313,9 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
             : eventResource;
 
           await calendar.events.update({ calendarId, eventId, requestBody: body });
-          changes.modified.push(`${localDate}: ${summary}${isCancelled ? ' (Hersteld)' : ''}`);
+          if (!isRollingHorizon) {
+            changes.modified.push(`${localDate}: ${summary}${isCancelled ? ' (Hersteld)' : ''}`);
+          }
         }
       }
       changes.totalProcessed++;
@@ -309,7 +324,6 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
     }
 
     // 4. SMART CLEANUP (DELETE)
-    const todayObj = new Date();
     // We only clean up events starting from the first day of the current month
     // because Vlomis scraping only fetches from the 1st of the current month.
     // Older events are preserved in the calendar to maintain history.
@@ -325,7 +339,12 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
 
         if (isFromCurrentMonthOnwards) {
           await calendar.events.delete({ calendarId, eventId: id });
-          changes.removed.push(`${ev.start?.date || '?'}: ${ev.summary}`);
+          const eventDateObj = new Date(eventDateStr);
+          const diffDays = Math.round((eventDateObj.getTime() - todayObj.getTime()) / (1000 * 60 * 60 * 24));
+          const isRollingHorizon = diffDays >= 330;
+          if (!isRollingHorizon) {
+            changes.removed.push(`${ev.start?.date || '?'}: ${ev.summary}`);
+          }
           // Increased delay to 250ms for performance and avoiding rate limits
           await new Promise(r => setTimeout(r, 250));
         } else {
