@@ -84,16 +84,22 @@ const registratieColors: Record<
   { bg: string; text: string; border: string; label: string }
 > = {
   Dagdienst: {
-    bg: "bg-emerald-100",
-    text: "text-emerald-800",
-    border: "border-emerald-300",
+    bg: "bg-red-100",
+    text: "text-red-800",
+    border: "border-red-300",
     label: "Dagdienst",
   },
   "Dagdienst kantooruren": {
-    bg: "bg-teal-100",
-    text: "text-teal-800",
-    border: "border-teal-300",
+    bg: "bg-red-50",
+    text: "text-red-700",
+    border: "border-red-200",
     label: "Kantoor",
+  },
+  Nachtdienst: {
+    bg: "bg-red-200",
+    text: "text-red-900",
+    border: "border-red-400",
+    label: "Nachtdienst",
   },
   Reserve: {
     bg: "bg-amber-100",
@@ -108,21 +114,27 @@ const registratieColors: Record<
     label: "Rust",
   },
   Ziekte: {
-    bg: "bg-red-100",
-    text: "text-red-800",
-    border: "border-red-300",
+    bg: "bg-rose-100",
+    text: "text-rose-800",
+    border: "border-rose-300",
     label: "Ziekte",
   },
   Verlof: {
-    bg: "bg-sky-100",
-    text: "text-sky-800",
-    border: "border-sky-300",
+    bg: "bg-orange-100",
+    text: "text-orange-800",
+    border: "border-orange-300",
     label: "Verlof",
   },
+  "Recuperatie verlof": {
+    bg: "bg-orange-100",
+    text: "text-orange-800",
+    border: "border-orange-300",
+    label: "Recup",
+  },
   "Vorming (dienstvrijstelling)": {
-    bg: "bg-indigo-100",
-    text: "text-indigo-800",
-    border: "border-indigo-300",
+    bg: "bg-amber-100",
+    text: "text-amber-800",
+    border: "border-amber-300",
     label: "Vorming",
   },
 };
@@ -132,10 +144,29 @@ function getColorForType(type: string) {
 
   if (type.includes('Verlof') && type.includes('Aangevraagd')) {
     return {
-      bg: "bg-sky-50",
-      text: "text-sky-600",
-      border: "border-sky-200 border-dashed",
+      bg: "bg-orange-50",
+      text: "text-orange-600",
+      border: "border-orange-200 border-dashed",
       label: "Verlof (Aanvraag)",
+    };
+  }
+
+  const s = type.toLowerCase();
+  if (s.includes('recup') || s.includes('verlof') || s.includes('compensatie') || s.includes('vakantie')) {
+    return {
+      bg: "bg-orange-100",
+      text: "text-orange-800",
+      border: "border-orange-300",
+      label: type,
+    };
+  }
+
+  if (s.includes('dagdienst') || s.includes('nachtdienst')) {
+    return {
+      bg: "bg-red-100",
+      text: "text-red-800",
+      border: "border-red-300",
+      label: type,
     };
   }
 

@@ -81,6 +81,35 @@ export async function getGoogleClientForUser(userId: string) {
   return userClient;
 }
 
+export function getColorIdForType(registratiesoort: string): string {
+  const s = (registratiesoort || '').toLowerCase();
+
+  // Ziekte -> 4 (Flamingo / Koraalrood)
+  if (s.includes('ziekte')) {
+    return '4';
+  }
+
+  // Thuis / Vrij / Verlof / Recup -> 6 (Tangerine / Warm oranjerood / Terracotta)
+  if (
+    s.includes('verlof') ||
+    s.includes('recup') ||
+    s.includes('compensatie') ||
+    s.includes('omstandigheid') ||
+    s.includes('vakantie') ||
+    s.includes('rust')
+  ) {
+    return '6';
+  }
+
+  // Vorming / Opleiding -> 5 (Banana / Geel)
+  if (s.includes('vorming') || s.includes('opleiding')) {
+    return '5';
+  }
+
+  // Werken (Dagdienst, Nachtdienst, Vaartdienst, etc.) -> 11 (Tomato / Felrood)
+  return '11';
+}
+
 export async function syncEventsToCalendar(userId: string, events: any[], limit: number = 500, forceReport: boolean = false, includeHistory: boolean = false, referteData?: any) {
   try {
     console.log(`[syncEventsToCalendar] Starting smart sync for user ${userId} with ${events.length} potential events`);
@@ -291,12 +320,15 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
       dt.setDate(dt.getDate() + 1);
       const end = { date: dt.toISOString().split('T')[0] };
 
+      const colorId = getColorIdForType(type);
+
       const eventResource = {
         summary,
         description,
         start,
         end,
         id: eventId,
+        colorId,
         reminders: { useDefault: false, overrides: [] }, // No reminders
         transparency: 'transparent'
       };
@@ -331,11 +363,13 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
         }
       } else {
         const isCancelled = existing.status === 'cancelled';
-        const isDifferent =
+        const isContentDifferent =
           isCancelled ||
           existing.summary !== summary ||
           existing.description !== description ||
           existing.start?.date !== start.date;
+        const isColorDifferent = existing.colorId !== colorId;
+        const isDifferent = isContentDifferent || isColorDifferent;
 
         if (isDifferent) {
           // If it was in the trash, restore it while updating
@@ -344,7 +378,7 @@ export async function syncEventsToCalendar(userId: string, events: any[], limit:
             : eventResource;
 
           await calendar.events.update({ calendarId, eventId, requestBody: body });
-          if (!isRollingHorizon) {
+          if (isContentDifferent && !isRollingHorizon) {
             changes.modified.push(`${localDate}: ${summary}${isCancelled ? ' (Hersteld)' : ''}`);
           }
         }
