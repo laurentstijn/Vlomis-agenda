@@ -106,12 +106,12 @@ export async function GET(request: Request) {
 
         console.log(`[BatchSync] ${usersToSync.length} users are due for sync.`);
 
-        // Process users in batches of 3 to avoid Vercel timeouts (300s limit)
-        // while also not hitting Browserless concurrent limits
-        const BATCH_SIZE = 3;
+        // Process users sequentially (BATCH_SIZE = 1) to avoid Browserless concurrency limits (max 2)
+        // and prevent scraping timeouts/failures. 5 users take ~75s total, well within Vercel's 300s limit.
+        const BATCH_SIZE = 1;
         for (let i = 0; i < usersToSync.length; i += BATCH_SIZE) {
             const batch = usersToSync.slice(i, i + BATCH_SIZE);
-            console.log(`[BatchSync] Processing batch ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} users)...`);
+            console.log(`[BatchSync] Processing user ${i + 1}/${usersToSync.length} (${batch[0]?.vlomis_username})...`);
 
             await Promise.all(batch.map(async (user) => {
                 try {

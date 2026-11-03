@@ -595,11 +595,11 @@ async function handleRequest(request: Request) {
           }
         }
 
-        // Update user metadata (last_sync_at should always be updated after an attempt)
-        if (currentUser?.id) {
+        // Update user metadata (last_sync_at should ONLY be updated on successful scrape)
+        if (currentUser?.id && scrapeSuccess) {
           const updateData: any = { last_sync_at: new Date().toISOString() };
           // Only update display_name if scrape was successful and realName is available
-          if (scrapeSuccess && result.realName && currentUser.display_name !== result.realName) {
+          if (result.realName && currentUser.display_name !== result.realName) {
             updateData.display_name = result.realName;
           }
           await supabaseAdmin.from('users').update(updateData).eq('id', currentUser.id);
@@ -678,6 +678,9 @@ async function handleRequest(request: Request) {
     if (finalData.length > 0 && currentUser?.google_access_token) {
       // Trigger if: forced (Vernieuwen), OR just scraped successfully, OR no calendar yet
       const needsSync = forceSync || isLive || !currentUser.google_calendar_id;
+      // CRITICAL: Only force a morning report if the scrape was actually successful!
+      // Never report "Geen wijzigingen" if we failed to connect to Vlomis and fell back to cache.
+      const shouldForceReport = forceReport && scrapeSuccess;
 
       if (needsSync) {
         try {
@@ -689,7 +692,7 @@ async function handleRequest(request: Request) {
           const dynamicLimit = (forceSync || !currentUser.google_calendar_id) ? 500 : syncLimit;
 
           waitUntil((async () => {
-            await syncEventsToCalendar(currentUser.id, finalData, dynamicLimit, forceReport, false, referteData);
+            await syncEventsToCalendar(currentUser.id, finalData, dynamicLimit, shouldForceReport, false, referteData);
             console.log(`[Background] Google Sync finished for ${username}.`);
           })());
 
